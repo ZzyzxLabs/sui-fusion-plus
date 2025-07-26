@@ -4,7 +4,7 @@ module atomic_swap::test;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 use sui::test_scenario::{Self as ts, Scenario};
-use atomic_swap::escrow;
+use atomic_swap::escrow_src;
 use sui::clock::{Self, Clock};
 use sui::hash::{keccak256};
 use usdc::usdc::USDC;
@@ -29,7 +29,7 @@ fun test_create_escrowSrc() {
     let order_hash: vector<u8> = keccak256(&b"orderHash");
     let hashlock: vector<u8> = keccak256(&b"hashlock");
 
-	escrow::createEscrowSrc<SUI>(
+	escrow_src::createEscrowSrc<SUI>(
 		order_hash,
 		hashlock,
 		ALICE,

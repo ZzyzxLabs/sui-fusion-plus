@@ -1,4 +1,4 @@
-module atomic_swap::escrow;
+module atomic_swap::solver;
 
 use sui::event;
 use sui::dynamic_object_field as dof;
