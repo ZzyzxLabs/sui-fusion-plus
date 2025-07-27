@@ -11,14 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: mysten/sui-tools:ci
+    defaults:
+      run:
+        working-directory: ./atomic_swap
     steps:
       - uses: actions/checkout@v4
-      - name: Change to atomic swap directory
-        run: cd sui-fusion-plus/atomic_swap
       - name: Build
-        run: cd sui-fusion-plus/atomic_swap && sui move build
-      # - name: Run Test
-      #   run: cd sui-fusion-plus/atomic_swap && sui move test
+        run: sui move build
+      - name: Run Test
+        run: sui move test
       #Enable when support --coverage flag in sui-tools docker
       # - name: coverage test
       #   run: sui move test --coverage
