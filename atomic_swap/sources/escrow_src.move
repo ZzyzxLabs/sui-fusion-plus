@@ -8,6 +8,7 @@ use sui::clock::{timestamp_ms, Clock};
 use sui::balance::{Self, Balance};
 use sui::sui::SUI;
 use usdc::usdc::USDC;
+use atomic_swap::timelocks;
 // use sui::transfer;
 
 const EInvalidSecret: u64 = 1;

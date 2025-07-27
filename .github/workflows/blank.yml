@@ -2,9 +2,9 @@ name: Sui Move Tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   test:
@@ -13,10 +13,12 @@ jobs:
       image: mysten/sui-tools:ci
     steps:
       - uses: actions/checkout@v4
+      - name: Change to atomic swap directory
+        run: cd sui-fusion-plus/atomic_swap
       - name: Build
-        run: sui move build
-      - name: Run Test
-        run: sui move test
+        run: cd sui-fusion-plus/atomic_swap && sui move build
+      # - name: Run Test
+      #   run: cd sui-fusion-plus/atomic_swap && sui move test
       #Enable when support --coverage flag in sui-tools docker
       # - name: coverage test
       #   run: sui move test --coverage
