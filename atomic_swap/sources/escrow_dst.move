@@ -5,12 +5,10 @@ module atomic_swap::escrow_dst;
 
 // === Imports ===
 use sui::event;
-use sui::dynamic_object_field as dof;
-use sui::coin::{Self, Coin, into_balance};
+use sui::coin::{Coin, into_balance};
 use sui::hash::{keccak256};
 use sui::clock::{timestamp_ms, Clock};
 use sui::balance::{Self, Balance};
-use sui::sui::SUI;
 use usdc::usdc::USDC;
 use atomic_swap::timelocks::{Self, Timelock};
 
@@ -54,7 +52,7 @@ public(package) fun create_escrow_dst<T>(
     taker: address, // the resolver
     asset: Coin<T>,
     safetyDeposit: Coin<USDC>,
-    clock: &Clock, // TODO: add timelocks
+    clock: &Clock, 
     ctx: &mut TxContext
 ) {
     let balance = into_balance(asset);
@@ -68,7 +66,7 @@ public(package) fun create_escrow_dst<T>(
         balance: balance,
         safetyDeposit: depositBalance,
     };
-    timelocks::init_timelock(object::id(&escrow), clock, 5, 10, 15, 20, 0, 0, 0, ctx);
+    timelocks::init_timelock(object::id(&escrow), clock, 0, 0, 0, 0, 5, 10, 15, ctx);
     transfer::share_object(escrow);
 }
 
@@ -86,25 +84,24 @@ entry fun withdraw<T>(
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_withdraw_dst() < timestamp_ms(clock), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_cancel_dst() > timestamp_ms(clock), EInvalidTimelock);
-    withdraw_helper<T>(escrow, secret, ctx.sender(), ctx);
+
+    withdraw_helper<T>(escrow, secret, ctx);
 }
 
 /// Allows anyone to withdraw the escrow after the public withdrawal timelock has passed.
 /// The withdrawal must occur before the cancel timelock.
-entry fun publicWithdraw<T>(
+entry fun public_withdraw<T>(
     escrow: &mut EscrowDst<T>,
     secret: vector<u8>,
     timelock: &Timelock,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    //TODO: only access token holders
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_public_withdraw_dst() < timestamp_ms(clock), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_cancel_dst() > timestamp_ms(clock), EInvalidTimelock);
     
-    let maker = escrow.maker;
-    withdraw_helper<T>(escrow, secret, maker, ctx);
+    withdraw_helper<T>(escrow, secret, ctx);
 }
 
 /// Allows the taker to cancel the escrow and return funds to the taker.
@@ -127,17 +124,17 @@ entry fun cancel<T>(
 
 /// Internal helper function for withdrawing escrow funds.
 /// Validates the secret against the hashlock and transfers funds to the target.
+#[allow(lint(self_transfer))]
 fun withdraw_helper<T>(
     escrow: &mut EscrowDst<T>,
     secret: vector<u8>,
-    target: address,
     ctx: &mut TxContext
 ) {
     // TODO: check immutables here
     assert!(keccak256(&secret) == escrow.hashlock, EInvalidSecret);
 
     let asset = balance::withdraw_all(&mut escrow.balance).into_coin(ctx);
-    transfer::public_transfer(asset, target);
+    transfer::public_transfer(asset, escrow.maker);
 
     let safetyDeposit = balance::withdraw_all(&mut escrow.safetyDeposit).into_coin(ctx);
     transfer::public_transfer(safetyDeposit, ctx.sender());
