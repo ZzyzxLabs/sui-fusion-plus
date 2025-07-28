@@ -86,7 +86,7 @@ entry fun withdraw<T>(
 
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_withdraw_src() < timestamp_ms(clock), EInvalidTimelock);
-    assert!(timelock.get_deployed_at() + timelock.get_public_withdraw_src() > timestamp_ms(clock), EInvalidTimelock);
+    assert!(timelock.get_deployed_at() + timelock.get_cancel_src() > timestamp_ms(clock), EInvalidTimelock);
 
     withdraw_helper<T>(escrow, secret, ctx.sender(), ctx);
 }
@@ -105,7 +105,7 @@ entry fun withdraw_to<T>(
 
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_withdraw_src() < timestamp_ms(clock), EInvalidTimelock);
-    assert!(timelock.get_deployed_at() + timelock.get_public_withdraw_src() > timestamp_ms(clock), EInvalidTimelock);
+    assert!(timelock.get_deployed_at() + timelock.get_cancel_src() > timestamp_ms(clock), EInvalidTimelock);
 
     withdraw_helper<T>(escrow, secret, target, ctx);
 }
@@ -119,6 +119,8 @@ entry fun publicWithdraw<T>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
+    //TODO: only access token holders
+    
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_public_withdraw_src() < timestamp_ms(clock), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_cancel_src() > timestamp_ms(clock), EInvalidTimelock);
@@ -139,7 +141,6 @@ entry fun cancel<T>(
 
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_cancel_src() < timestamp_ms(clock), EInvalidTimelock);
-    assert!(timelock.get_deployed_at() + timelock.get_public_cancel_src() > timestamp_ms(clock), EInvalidTimelock);
 
     cancel_helper<T>(escrow, ctx);
 }
@@ -151,6 +152,8 @@ entry fun publicCancel<T>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
+    //TODO: only access token holders
+
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_public_cancel_src() < timestamp_ms(clock), EInvalidTimelock);
 
@@ -172,6 +175,9 @@ fun withdraw_helper<T>(
 
     let asset = balance::withdraw_all(&mut escrow.balance).into_coin(ctx);
     transfer::public_transfer(asset, target);
+
+    let safetyDeposit = balance::withdraw_all(&mut escrow.safetyDeposit).into_coin(ctx);
+    transfer::public_transfer(safetyDeposit, ctx.sender());
 
     event::emit(EscrowWithdrawal {secret: secret });
 }
