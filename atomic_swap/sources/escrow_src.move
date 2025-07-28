@@ -5,12 +5,10 @@ module atomic_swap::escrow_src;
 
 // === Imports ===
 use sui::event;
-use sui::dynamic_object_field as dof;
-use sui::coin::{Self, Coin, into_balance};
+use sui::coin::{Coin, into_balance};
 use sui::hash::{keccak256};
 use sui::clock::{timestamp_ms, Clock};
 use sui::balance::{Self, Balance};
-use sui::sui::SUI;
 use usdc::usdc::USDC;
 use atomic_swap::timelocks::{Self, Timelock};
 
@@ -119,8 +117,6 @@ entry fun publicWithdraw<T>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    //TODO: only access token holders
-    
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_public_withdraw_src() < timestamp_ms(clock), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_cancel_src() > timestamp_ms(clock), EInvalidTimelock);
@@ -152,8 +148,6 @@ entry fun publicCancel<T>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    //TODO: only access token holders
-
     assert!(timelock.get_escrow_id() == object::id(escrow), EInvalidTimelock);
     assert!(timelock.get_deployed_at() + timelock.get_public_cancel_src() < timestamp_ms(clock), EInvalidTimelock);
 
@@ -164,13 +158,14 @@ entry fun publicCancel<T>(
 
 /// Internal helper function for withdrawing escrow funds.
 /// Validates the secret against the hashlock and transfers funds to the target.
+#[allow(lint(self_transfer))]
 fun withdraw_helper<T>(
     escrow: &mut EscrowSrc<T>,
     secret: vector<u8>,
     target: address,
     ctx: &mut TxContext
 ) {
-    // TODO: check immutables here
+    // TODO: check immutables here  
     assert!(keccak256(&secret) == escrow.hashlock, EInvalidSecret);
 
     let asset = balance::withdraw_all(&mut escrow.balance).into_coin(ctx);
