@@ -17,6 +17,8 @@ use atomic_swap::timelocks::{Self, Timelock};
 use atomic_swap::escrow_src::{Self, create_escrow_src};
 use std::string::{Self, String};
 
+// === Errors ===
+const EWrongOrder: u64 = 1;
 // === Structs ===
 /// Represents the protocol admin capabilities for atomic swaps.
 /// This object is used to manage protocol-level operations and is stored in the admin's account.
@@ -41,7 +43,6 @@ public struct Order<phantom T> has key{
     id: UID,
     salt: u256,
     maker: address,
-    receiver: address,
     makerAsset: Balance<T>,
     takerAsset: String,
     makingAmount: u256,
@@ -75,7 +76,6 @@ public fun deploy_limit<T>(
         id: object::new(ctx),
         salt: 0,
         maker: ctx.sender(),
-        receiver: ctx.sender(), // For simplicity, receiver is the same as maker
         makerAsset: into_balance(in),
         takerAsset: out,
         makingAmount: makingAmount,
@@ -109,13 +109,14 @@ public fun fill_order<T>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
+    assert!(order.id == winner.order_id, EWrongOrder);
     let coin_to_escrow = coin::take<T>(&mut order.makerAsset, (winner.amount as u64), ctx);
     let order_hash: vector<u8> = keccak256(&order_hash);
     create_escrow_src<T>(
         order_hash,
         hashlock,
         order.maker,
-        order.receiver,
+        ctx.sender(),
         coin_to_escrow,
         safetyDeposit,
         clock,
