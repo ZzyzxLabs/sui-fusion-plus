@@ -109,7 +109,7 @@ public fun fill_order<T>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    assert!(order.id == winner.order_id, EWrongOrder);
+    assert!(object::id(order) == winner.order_id, EWrongOrder);
     let coin_to_escrow = coin::take<T>(&mut order.makerAsset, (winner.amount as u64), ctx);
     let order_hash: vector<u8> = keccak256(&order_hash);
     create_escrow_src<T>(
