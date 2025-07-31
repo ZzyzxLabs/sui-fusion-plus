@@ -14,7 +14,8 @@ use sui::balance::{Self, Balance};
 use sui::sui::SUI;
 use usdc::usdc::USDC;
 use atomic_swap::timelocks::{Self, Timelock};
-use atomic_swap::escrow_src::{Self, create_escrow_src<T>};
+use atomic_swap::escrow_src::{Self, create_escrow_src};
+use std::string::{Self, String};
 
 // === Structs ===
 /// Represents the protocol admin capabilities for atomic swaps.
@@ -22,9 +23,12 @@ use atomic_swap::escrow_src::{Self, create_escrow_src<T>};
 public struct ProtocolCap has key, store {
     id: UID,
 }
-
+/// Represents the winner of an auction in the atomic swap protocol.
+/// This struct holds the auction winner's ID and the amount they won.
 public struct Auction_Winner has key {
     id: UID,
+    amount: u256,
+    order_id: ID
 }
 
 // TODO: Some Params Discussion
@@ -33,7 +37,7 @@ public struct MakerTrait has key, store {
 }
 
 // Order for Sui
-public struct Order<T> has key{
+public struct Order<phantom T> has key{
     id: UID,
     salt: u256,
     maker: address,
@@ -81,10 +85,40 @@ public fun deploy_limit<T>(
     transfer::share_object(limit_order);
 }
 
+public fun mint_auction_winner<T>(
+    protocol_cap: &ProtocolCap,
+    order: &Order<T>,
+    amount: u256,
+    winner: address,
+    ctx: &mut TxContext
+) {
+    let auction_winner = Auction_Winner {
+        id: object::new(ctx),
+        order_id: object::id(order),
+        amount: amount,
+    };
+    transfer::transfer(auction_winner, winner);
+}
+
 public fun fill_order<T>(
     order: &mut Order<T>,
-    takerAsset: Coin<T>,
+    order_hash: vector<u8>,
+    winner: &Auction_Winner,
+    safetyDeposit: Coin<USDC>,
+    hashlock: vector<u8>,
+    clock: &Clock,
+    ctx: &mut TxContext
 ) {
-    orderHash = keccak256(order); //placeholder for actual hash function
-    create_escrow_src(orderHash, , takerAsset);
+    let coin_to_escrow = coin::take<T>(&mut order.makerAsset, (winner.amount as u64), ctx);
+    let order_hash: vector<u8> = keccak256(&order_hash);
+    create_escrow_src<T>(
+        order_hash,
+        hashlock,
+        order.maker,
+        order.receiver,
+        coin_to_escrow,
+        safetyDeposit,
+        clock,
+        ctx
+    );
 }
