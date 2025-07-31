@@ -62,6 +62,7 @@ fun init(
 }
 
 // === Public Functions ===
+// maker creates a limit order for atomic swap
 public fun deploy_limit<T>(
     in: Coin<T>,
     out: String,
@@ -85,6 +86,7 @@ public fun deploy_limit<T>(
     transfer::share_object(limit_order);
 }
 
+// Relayer create an auction winner for the taker
 public fun mint_auction_winner<T>(
     protocol_cap: &ProtocolCap,
     order: &Order<T>,
@@ -100,6 +102,7 @@ public fun mint_auction_winner<T>(
     transfer::transfer(auction_winner, winner);
 }
 
+// Taker fills an order in the atomic swap protocol with the auction winner.
 public fun fill_order<T>(
     order: &mut Order<T>,
     order_hash: vector<u8>,
