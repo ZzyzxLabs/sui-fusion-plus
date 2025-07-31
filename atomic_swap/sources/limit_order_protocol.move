@@ -7,7 +7,7 @@ module atomic_swap::limit_order_protocol;
 // === Imports ===
 use sui::event;
 use sui::dynamic_object_field as dof;
-use sui::coin::{Self, Coin, into_balance};
+use sui::coin::{Self, Coin, into_balance, from_balance};
 use sui::hash::{keccak256};
 use sui::clock::{timestamp_ms, Clock};
 use sui::balance::{Self, Balance};
@@ -38,7 +38,7 @@ public struct MakerTrait has key, store {
     id: UID,
 }
 
-// Order for Sui
+// Order When Sui is the Source Chain
 public struct Order<phantom T> has key{
     id: UID,
     salt: u256,
@@ -48,6 +48,11 @@ public struct Order<phantom T> has key{
     makingAmount: u256,
     takingAmount: u256,
     makerTrait: MakerTrait,
+}
+
+public struct OrderCap has key, store {
+    id: UID,
+    order_id: ID
 }
 
 // === Init Functions ===
@@ -83,6 +88,11 @@ public fun deploy_limit<T>(
         takingAmount: takingAmount,
         makerTrait: makerTrait,
     };
+    let order_cap = OrderCap {
+        id: object::new(ctx),
+        order_id: object::id(&limit_order),
+    };
+    transfer::public_transfer(order_cap, ctx.sender());
     transfer::share_object(limit_order);
 }
 
@@ -125,4 +135,31 @@ public fun fill_order<T>(
         clock,
         ctx
     );
+}
+
+// Maker cancel an order onchain
+public fun cancel_order<T>(
+    order_cap: &OrderCap,
+    order: Order<T>,
+    ctx: &mut TxContext
+) {
+    assert!(object::id(&order) == order_cap.order_id, EWrongOrder);
+    let Order {
+        id,
+        salt: _,
+        maker: _,
+        makerAsset,
+        takerAsset: _,
+        makingAmount: _,
+        takingAmount: _,
+        makerTrait,
+    } = order;
+    transfer::public_transfer(from_balance(makerAsset, ctx), ctx.sender());
+    object::delete(id);
+    let MakerTrait {
+        id,
+    } = makerTrait;
+    object::delete(id);
+    
+
 }
