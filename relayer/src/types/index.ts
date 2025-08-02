@@ -4,13 +4,10 @@
 
 export interface Order {
   id: string;
-  sourceChain: string;
-  destinationChain: string;
-  sourceToken: string;
-  destinationToken: string;
-  amount: string;
-  recipient: string;
-  sender: string;
+  chain: string;
+  order: any;
+  txHash: string;
+  signature: string;
   status: OrderStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -32,14 +29,7 @@ export interface RelayerStatus {
   pendingOrders: number;
   processedOrders: number;
   totalOrders: number;
-  lastProcessedBlock: {
-    [chainId: string]: number;
-  };
-  balances: {
-    [chainId: string]: {
-      [tokenAddress: string]: string;
-    };
-  };
+  
 }
 
 export interface SupportedChain {
@@ -52,15 +42,8 @@ export interface SupportedChain {
 }
 
 export interface SubmitOrderRequest {
-  sourceChain: string;
-  destinationChain: string;
-  sourceToken: string;
-  destinationToken: string;
-  amount: string;
-  recipient: string;
-  sender: string;
-  deadline?: number;
-  slippage?: number;
+  chain: "sui" | "evm",
+  payload: any
 }
 
 export interface SubmitOrderResponse {
@@ -73,8 +56,7 @@ export interface SubmitOrderResponse {
 
 export interface GetOrdersFilters {
   status?: OrderStatus;
-  sourceChain?: string;
-  destinationChain?: string;
+  chain?: string;
   sender?: string;
   limit?: number;
   offset?: number;

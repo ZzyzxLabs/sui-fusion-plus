@@ -14,7 +14,7 @@ relayerRouter.get('/status', relayerController.getStatus);
  * Submit a cross-chain order for relay
  * POST /api/v1/relayer/submit
  */
-relayerRouter.post('/submit', relayerController.submitOrder);
+relayerRouter.post('/orders', relayerController.submitOrder);
 
 /**
  * Get order status
@@ -39,3 +39,4 @@ relayerRouter.post('/order/:orderId/cancel', relayerController.cancelOrder);
  * GET /api/v1/relayer/chains
  */
 relayerRouter.get('/chains', relayerController.getSupportedChains);
+

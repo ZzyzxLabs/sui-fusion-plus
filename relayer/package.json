@@ -29,12 +29,13 @@
     "npm": ">=8.0.0"
   },
   "dependencies": {
+    "axios": "^1.11.0",
     "cors": "^2.8.5",
+    "cross-chain-sdk-custom": "file:../cross-chain-sdk-custom/cross-chain-sdk",
     "dotenv": "^17.2.1",
     "express": "^4.21.2",
     "helmet": "^8.1.0",
-    "morgan": "^1.10.1",
-    "cross-chain-sdk-custom": "file:../cross-chain-sdk-custom/cross-chain-sdk"
+    "morgan": "^1.10.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

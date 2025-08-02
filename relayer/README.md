@@ -81,7 +81,7 @@ npm start
 
 ### Relayer Operations
 - `GET /api/v1/relayer/status` - Get relayer status
-- `POST /api/v1/relayer/submit` - Submit a cross-chain order
+- `POST /api/v1/relayer/orders` - Submit a cross-chain order
 - `GET /api/v1/relayer/order/:orderId` - Get order status
 - `GET /api/v1/relayer/orders` - Get all orders (with filtering)
 - `POST /api/v1/relayer/order/:orderId/cancel` - Cancel an order
@@ -91,7 +91,7 @@ npm start
 
 Submit a cross-chain order:
 ```bash
-curl -X POST http://localhost:3000/api/v1/relayer/submit \
+curl -X POST http://localhost:3000/api/v1/relayer/orders \
   -H "Content-Type: application/json" \
   -d '{
     "sourceChain": "ethereum",

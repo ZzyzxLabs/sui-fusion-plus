@@ -30,26 +30,10 @@ export class RelayerService {
 
     return {
       isActive: true,
-      supportedChains: ['ethereum', 'sui', 'polygon', 'bsc'],
+      supportedChains: ['sui', 'evm'],
       pendingOrders,
       processedOrders,
       totalOrders: this.orders.size,
-      lastProcessedBlock: {
-        'ethereum': 18800000,
-        'sui': 25000000,
-        'polygon': 50000000,
-        'bsc': 32000000
-      },
-      balances: {
-        'ethereum': {
-          'ETH': '10.5',
-          'USDC': '50000.0'
-        },
-        'sui': {
-          'SUI': '1000.0',
-          'USDC': '25000.0'
-        }
-      }
     };
   }
 
@@ -62,15 +46,13 @@ export class RelayerService {
 
     const orderId = `order_${++this.orderCounter}_${Date.now()}`;
     
+    
     const order: Order = {
       id: orderId,
-      sourceChain: orderData.sourceChain,
-      destinationChain: orderData.destinationChain,
-      sourceToken: orderData.sourceToken,
-      destinationToken: orderData.destinationToken,
-      amount: orderData.amount,
-      recipient: orderData.recipient,
-      sender: orderData.sender,
+      chain: orderData.chain,
+      order: orderData.payload.order,
+      txHash: orderData.payload.txHash || '',
+      signature: orderData.payload.signature || '',
       status: OrderStatus.PENDING,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -79,9 +61,9 @@ export class RelayerService {
     this.orders.set(orderId, order);
 
     // Simulate order processing (in real implementation, this would trigger actual processing)
-    setTimeout(() => {
-      this.processOrder(orderId);
-    }, 1000);
+    // setTimeout(() => {
+    //   this.processOrder(orderId);
+    // }, 1000);
 
     return {
       orderId,
@@ -109,16 +91,9 @@ export class RelayerService {
     if (filters.status) {
       ordersArray = ordersArray.filter(order => order.status === filters.status);
     }
-    if (filters.sourceChain) {
-      ordersArray = ordersArray.filter(order => order.sourceChain === filters.sourceChain);
+    if (filters.chain) {
+      ordersArray = ordersArray.filter(order => order.chain === filters.chain);
     }
-    if (filters.destinationChain) {
-      ordersArray = ordersArray.filter(order => order.destinationChain === filters.destinationChain);
-    }
-    if (filters.sender) {
-      ordersArray = ordersArray.filter(order => order.sender === filters.sender);
-    }
-
     // Sort by creation date (newest first)
     ordersArray.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
@@ -173,36 +148,20 @@ export class RelayerService {
   public async getSupportedChains(): Promise<SupportedChain[]> {
     return [
       {
-        chainId: 'ethereum',
-        name: 'Ethereum',
+        chainId: 'Sepolia',
+        name: 'Sepolia',
         rpcUrl: 'https://eth-mainnet.alchemyapi.io/v2/...',
         isActive: true,
         supportedTokens: ['ETH', 'USDC', 'USDT', 'DAI'],
         blockConfirmations: 12
       },
       {
-        chainId: 'sui',
+        chainId: 'Sui',
         name: 'Sui Network',
         rpcUrl: 'https://fullnode.mainnet.sui.io',
         isActive: true,
         supportedTokens: ['SUI', 'USDC'],
         blockConfirmations: 1
-      },
-      {
-        chainId: 'polygon',
-        name: 'Polygon',
-        rpcUrl: 'https://polygon-rpc.com',
-        isActive: true,
-        supportedTokens: ['MATIC', 'USDC', 'USDT'],
-        blockConfirmations: 20
-      },
-      {
-        chainId: 'bsc',
-        name: 'BNB Smart Chain',
-        rpcUrl: 'https://bsc-dataseed.binance.org',
-        isActive: true,
-        supportedTokens: ['BNB', 'USDT', 'BUSD'],
-        blockConfirmations: 15
       }
     ];
   }
@@ -211,24 +170,19 @@ export class RelayerService {
    * Validate order data
    */
   private validateOrderData(orderData: SubmitOrderRequest): void {
-    if (!orderData.sourceChain || !orderData.destinationChain) {
-      throw new Error('Source and destination chains are required');
+    if (!orderData.chain || !orderData.payload) {
+      throw new Error('Chain and payload are required');
     }
 
-    if (!orderData.sourceToken || !orderData.destinationToken) {
-      throw new Error('Source and destination tokens are required');
+    if (orderData.chain === 'sui') {
+      if (!orderData.payload.order || !orderData.payload.txHash) {
+        throw new Error('Order and txHash are required');
+      }
     }
-
-    if (!orderData.amount || parseFloat(orderData.amount) <= 0) {
-      throw new Error('Valid amount is required');
-    }
-
-    if (!orderData.recipient || !orderData.sender) {
-      throw new Error('Recipient and sender addresses are required');
-    }
-
-    if (orderData.sourceChain === orderData.destinationChain) {
-      throw new Error('Source and destination chains must be different');
+    if (orderData.chain === 'evm') {
+      if (!orderData.payload.order || !orderData.payload.signature) {
+        throw new Error('Order and signature are required');
+      }
     }
   }
 
