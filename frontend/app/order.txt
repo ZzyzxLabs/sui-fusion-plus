@@ -1,0 +1,47 @@
+const order = Sdk.CrossChainOrder.new(
+                new Address(src.escrowFactory),
+                {
+                    salt: Sdk.randBigInt(1000n),
+                    maker: new Address(await srcChainUser.getAddress()),
+                    makingAmount: parseUnits('100', 6),
+                    takingAmount: parseUnits('99', 6),
+                    makerAsset: new Address(config.chain.source.tokens.USDC.address),
+                    takerAsset: new Address(config.chain.destination.tokens.USDC.address)
+                },
+                {
+                    hashLock: Sdk.HashLock.forMultipleFills(leaves),
+                    timeLocks: Sdk.TimeLocks.new({
+                        srcWithdrawal: 10n, // 10s finality lock for test
+                        srcPublicWithdrawal: 120n, // 2m for private withdrawal
+                        srcCancellation: 121n, // 1sec public withdrawal
+                        srcPublicCancellation: 122n, // 1sec private cancellation
+                        dstWithdrawal: 10n, // 10s finality lock for test
+                        dstPublicWithdrawal: 100n, // 100sec private withdrawal
+                        dstCancellation: 101n // 1sec public withdrawal
+                    }),
+                    srcChainId,
+                    dstChainId,
+                    srcSafetyDeposit: parseEther('0.001'),
+                    dstSafetyDeposit: parseEther('0.001')
+                },
+                {
+                    auction: new Sdk.AuctionDetails({
+                        initialRateBump: 0,
+                        points: [],
+                        duration: 120n,
+                        startTime: srcTimestamp
+                    }),
+                    whitelist: [
+                        {
+                            address: new Address(src.resolver),
+                            allowFrom: 0n
+                        }
+                    ],
+                    resolvingStartTime: 0n
+                },
+                {
+                    nonce: Sdk.randBigInt(UINT_40_MAX),
+                    allowPartialFills: true,
+                    allowMultipleFills: true
+                }
+            )
