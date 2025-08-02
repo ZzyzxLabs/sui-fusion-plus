@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@1inch/byte-utils':
+        specifier: ^3.1.0
+        version: 3.1.0
       '@1inch/cross-chain-sdk':
         specifier: ^0.2.1-rc.58
         version: 0.2.1-rc.62(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
