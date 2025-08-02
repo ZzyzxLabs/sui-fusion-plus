@@ -1,0 +1,8 @@
+[config]
+# will be set to mainnet by default if omitted
+rpc = "https://fullnode.testnet.sui.io:443"
+
+[packages]
+# based on source code (syntax same as in Move.toml):
+usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "master" }
+atomic_swap = { id = "0x899f4b923c0de700c5fd3f2d1444dfee219b21b4439ac489c6c064e5156732e3" }
