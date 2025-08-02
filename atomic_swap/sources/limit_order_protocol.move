@@ -5,17 +5,13 @@ module atomic_swap::limit_order_protocol;
 
 
 // === Imports ===
-use sui::event;
-use sui::dynamic_object_field as dof;
 use sui::coin::{Self, Coin, into_balance, from_balance};
 use sui::hash::{keccak256};
-use sui::clock::{timestamp_ms, Clock};
-use sui::balance::{Self, Balance};
-use sui::sui::SUI;
+use sui::clock::{Clock};
+use sui::balance::{Balance};
 use usdc::usdc::USDC;
-use atomic_swap::timelocks::{Self, Timelock};
-use atomic_swap::escrow_src::{Self, create_escrow_src};
-use std::string::{Self, String};
+use atomic_swap::escrow_src::{create_escrow_src};
+use std::string::{String};
 
 // === Errors ===
 const EWrongOrder: u64 = 1;
@@ -27,14 +23,14 @@ public struct ProtocolCap has key, store {
 }
 /// Represents the winner of an auction in the atomic swap protocol.
 /// This struct holds the auction winner's ID and the amount they won.
-public struct Auction_Winner has key {
+public struct AuctionWinner has key {
     id: UID,
     amount: u256,
     order_id: ID
 }
 
 // TODO: Some Params Discussion
-public struct MakerTrait has key, store {
+public struct MakerTraits has key, store {
     id: UID,
 }
 
@@ -43,11 +39,11 @@ public struct Order<phantom T> has key{
     id: UID,
     salt: u256,
     maker: address,
-    makerAsset: Balance<T>,
-    takerAsset: String,
-    makingAmount: u256,
-    takingAmount: u256,
-    makerTrait: MakerTrait,
+    src_token: Balance<T>,
+    dst_token: String,
+    src_amount: u256,
+    dst_amount: u256,
+    maker_traits: MakerTraits,
 }
 
 public struct OrderCap has key, store {
@@ -68,25 +64,26 @@ fun init(
 
 // === Public Functions ===
 // maker creates a limit order for atomic swap
-public fun deploy_limit<T>(
-    in: Coin<T>,
-    out: String,
-    makingAmount: u256,
-    takingAmount: u256,
+#[allow(lint(self_transfer))]
+public fun create_order<T>(
+    src_token: Coin<T>,
+    dst_token: String,
+    src_amount: u256,
+    dst_amount: u256,
     ctx: &mut TxContext
 ) {
-    let makerTrait = MakerTrait {
+    let makerTrait = MakerTraits {
         id: object::new(ctx),
     };
     let limit_order = Order<T>{
         id: object::new(ctx),
         salt: 0,
         maker: ctx.sender(),
-        makerAsset: into_balance(in),
-        takerAsset: out,
-        makingAmount: makingAmount,
-        takingAmount: takingAmount,
-        makerTrait: makerTrait,
+        src_token: into_balance(src_token),
+        dst_token: dst_token,
+        src_amount: src_amount,
+        dst_amount: dst_amount,
+        maker_traits: makerTrait,
     };
     let order_cap = OrderCap {
         id: object::new(ctx),
@@ -98,13 +95,13 @@ public fun deploy_limit<T>(
 
 // Relayer create an auction winner for the taker
 public fun mint_auction_winner<T>(
-    protocol_cap: &ProtocolCap,
+    _protocol_cap: &ProtocolCap,
     order: &Order<T>,
     amount: u256,
     winner: address,
     ctx: &mut TxContext
 ) {
-    let auction_winner = Auction_Winner {
+    let auction_winner = AuctionWinner {
         id: object::new(ctx),
         order_id: object::id(order),
         amount: amount,
@@ -113,17 +110,17 @@ public fun mint_auction_winner<T>(
 }
 
 // Taker fills an order in the atomic swap protocol with the auction winner.
-public fun fill_order<T>(
+public(package) fun fill_order<T>(
     order: &mut Order<T>,
     order_hash: vector<u8>,
-    winner: &Auction_Winner,
-    safetyDeposit: Coin<USDC>,
+    winner: &AuctionWinner,
+    safety_deposit: Coin<USDC>,
     hashlock: vector<u8>,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
     assert!(object::id(order) == winner.order_id, EWrongOrder);
-    let coin_to_escrow = coin::take<T>(&mut order.makerAsset, (winner.amount as u64), ctx);
+    let coin_to_escrow = coin::take<T>(&mut order.src_token, (winner.amount as u64), ctx);
     let order_hash: vector<u8> = keccak256(&order_hash);
     create_escrow_src<T>(
         order_hash,
@@ -131,13 +128,14 @@ public fun fill_order<T>(
         order.maker,
         ctx.sender(),
         coin_to_escrow,
-        safetyDeposit,
+        safety_deposit,
         clock,
         ctx
     );
 }
 
 // Maker cancel an order onchain
+#[allow(lint(self_transfer))]
 public fun cancel_order<T>(
     order_cap: &OrderCap,
     order: Order<T>,
@@ -148,17 +146,17 @@ public fun cancel_order<T>(
         id,
         salt: _,
         maker: _,
-        makerAsset,
-        takerAsset: _,
-        makingAmount: _,
-        takingAmount: _,
-        makerTrait,
+        src_token,
+        dst_token: _,
+        src_amount: _,
+        dst_amount: _,
+        maker_traits,
     } = order;
-    transfer::public_transfer(from_balance(makerAsset, ctx), ctx.sender());
+    transfer::public_transfer(from_balance(src_token, ctx), ctx.sender());
     object::delete(id);
-    let MakerTrait {
+    let MakerTraits {
         id,
-    } = makerTrait;
+    } = maker_traits;
     object::delete(id);
     
 
