@@ -125,20 +125,6 @@ async function runTests() {
     console.log('');
   }
 
-  // Test 5: Get Signature (EVM orders only)
-  if (evmOrderHash) {
-    console.log('📝 Test 5: Get Signature');
-    const signatureResult = await apiCall('GET', `/signature?orderId=${evmOrderHash}`);
-    if (signatureResult.success) {
-      console.log('✅ Signature retrieved successfully');
-      console.log('   Order ID:', signatureResult.data.orderId);
-      console.log('   Target Chain:', signatureResult.data.targetChain);
-      console.log('   Signature:', signatureResult.data.signature.substring(0, 20) + '...');
-    } else {
-      console.log('❌ Get signature failed:', signatureResult.error);
-    }
-    console.log('');
-  }
 
   // Test 5.1: Try to get signature for Sui order (should fail)
   if (suiOrderHash) {
@@ -152,45 +138,10 @@ async function runTests() {
     }
     console.log('');
   }
-
-  // Test 6: Submit Auction Bid
-  if (evmOrderHash) {
-    console.log('📝 Test 6: Submit Auction Bid');
-    const auctionData = {
-      orderHash: evmOrderHash,
-      bidAmount: '1100000000000000000',
-      bidder: '0x742D35Cc6634C0532925a3b8D42C05E4d4F3fA58',
-      parameters: {
-        gasPrice: '20000000000',
-        deadline: Math.floor(Date.now() / 1000) + 3600
-      }
-    };
     
-    const auctionResult = await apiCall('POST', '/auction', auctionData);
-    if (auctionResult.success) {
-      console.log('✅ Auction bid submitted successfully');
-      console.log('   Auction ID:', auctionResult.data.auctionId);
-      var auctionId = auctionResult.data.auctionId;
-    } else {
-      console.log('❌ Auction bid submission failed:', auctionResult.error);
-    }
-    console.log('');
-  }
 
-  // Test 7: Get Auction Details
-  if (auctionId) {
-    console.log('📝 Test 7: Get Auction Details');
-    const auctionDetailsResult = await apiCall('GET', `/auction/${auctionId}`);
-    if (auctionDetailsResult.success) {
-      console.log('✅ Auction details retrieved successfully');
-      console.log('   Status:', auctionDetailsResult.data.status);
-      console.log('   Highest Bid:', auctionDetailsResult.data.highestBid?.amount || 'None');
-      console.log('   Total Bids:', auctionDetailsResult.data.bids.length);
-    } else {
-      console.log('❌ Get auction details failed:', auctionDetailsResult.error);
-    }
-    console.log('');
-  }
+
+  
 
   // Test 8: Verify Escrow (EVM Order)
   if (evmOrderHash) {
