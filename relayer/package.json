@@ -29,6 +29,8 @@
     "npm": ">=8.0.0"
   },
   "dependencies": {
+    "@mysten/dapp-kit": "^0.17.2",
+    "@mysten/sui": "^1.36.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^4.21.2",
