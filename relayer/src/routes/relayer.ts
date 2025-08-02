@@ -40,3 +40,23 @@ relayerRouter.post('/order/:orderId/cancel', relayerController.cancelOrder);
  */
 relayerRouter.get('/chains', relayerController.getSupportedChains);
 
+/**
+ * Get signature for an order (EVM orders only)
+ * GET /api/v1/relayer/signature?orderId=...&resolverId=...
+ */
+relayerRouter.get('/resolve-intent', relayerController.resolveIntent);
+
+/**
+ * Verify escrow status for an order
+ * POST /api/v1/relayer/verify
+ */
+relayerRouter.post('/verify', relayerController.verifyEscrow);
+
+/**
+ * Submit secret for an order
+ * POST /api/v1/relayer/secret
+ */
+relayerRouter.post('/secret', relayerController.submitSecret);
+
+
+

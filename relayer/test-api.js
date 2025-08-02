@@ -39,37 +39,33 @@ async function apiCall(method, endpoint, data = null) {
 const evmOrderData = {
   chain: 'evm',
   payload: {
-    evm: {
-      order: {
-        asset: '0xA0b86a33E6776808d5f67De71Ff7efCE9b5A0AA5',
-        amount: '1000000000000000000',
-        dstInfo: {
-          chain: 'sui',
-          recipient: '0x1234567890abcdef1234567890abcdef12345678'
-        },
-        nonce: '12345',
-        expiry: Math.floor(Date.now() / 1000) + 3600 // 1 hour from now
+    order: {
+      asset: '0xA0b86a33E6776808d5f67De71Ff7efCE9b5A0AA5',
+      amount: '1000000000000000000',
+      dstInfo: {
+        chain: 'sui',
+        recipient: '0x1234567890abcdef1234567890abcdef12345678'
       },
-      signature: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234',
-      maker: '0x742D35Cc6634C0532925a3b8D42C05E4d4F3fA58'
-    }
+      nonce: '12345',
+      expiry: Math.floor(Date.now() / 1000) + 3600 // 1 hour from now
+    },
+    signature: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234',
+    maker: '0x742D35Cc6634C0532925a3b8D42C05E4d4F3fA58'
   }
 };
 
 const suiOrderData = {
   chain: 'sui',
   payload: {
-    sui: {
-      order: {
-        asset: '0x2::sui::SUI',
-        amount: '1000000000',
-        dstInfo: {
-          chain: 'ethereum',
-          recipient: '0x742D35Cc6634C0532925a3b8D42C05E4d4F3fA58'
-        }
-      },
-      txHash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab'
-    }
+    order: {
+      asset: '0x2::sui::SUI',
+      amount: '1000000000',
+      dstInfo: {
+        chain: 'ethereum',
+        recipient: '0x742D35Cc6634C0532925a3b8D42C05E4d4F3fA58'
+      }
+    },
+    txHash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab'
   }
 };
 
@@ -114,31 +110,45 @@ async function runTests() {
   }
   console.log('');
 
-  // Test 4: Get Order by Hash (if we have one)
+  // Test 4: Get Order by ID (if we have one)
   if (evmOrderHash) {
-    console.log('📝 Test 4: Get Order by Hash');
-    const orderByHashResult = await apiCall('GET', `/orders/${evmOrderHash}`);
-    if (orderByHashResult.success) {
-      console.log('✅ Order retrieved by hash successfully');
-      console.log('   Order Hash:', orderByHashResult.data.orderHash);
-      console.log('   Chain:', orderByHashResult.data.chain);
-      console.log('   Status:', orderByHashResult.data.status);
+    console.log('📝 Test 4: Get Order by ID');
+    const orderByIdResult = await apiCall('GET', `/order/${evmOrderHash}`);
+    if (orderByIdResult.success) {
+      console.log('✅ Order retrieved by ID successfully');
+      console.log('   Order ID:', orderByIdResult.data.id);
+      console.log('   Chain:', orderByIdResult.data.chain);
+      console.log('   Status:', orderByIdResult.data.status);
     } else {
-      console.log('❌ Get order by hash failed:', orderByHashResult.error);
+      console.log('❌ Get order by ID failed:', orderByIdResult.error);
     }
     console.log('');
   }
 
-  // Test 5: Get Signature
+  // Test 5: Get Signature (EVM orders only)
   if (evmOrderHash) {
     console.log('📝 Test 5: Get Signature');
-    const signatureResult = await apiCall('GET', `/signature?orderHash=${evmOrderHash}`);
+    const signatureResult = await apiCall('GET', `/signature?orderId=${evmOrderHash}`);
     if (signatureResult.success) {
       console.log('✅ Signature retrieved successfully');
+      console.log('   Order ID:', signatureResult.data.orderId);
       console.log('   Target Chain:', signatureResult.data.targetChain);
       console.log('   Signature:', signatureResult.data.signature.substring(0, 20) + '...');
     } else {
       console.log('❌ Get signature failed:', signatureResult.error);
+    }
+    console.log('');
+  }
+
+  // Test 5.1: Try to get signature for Sui order (should fail)
+  if (suiOrderHash) {
+    console.log('📝 Test 5.1: Get Signature for Sui Order (should fail)');
+    const signatureResult = await apiCall('GET', `/signature?orderId=${suiOrderHash}`);
+    if (signatureResult.success) {
+      console.log('❌ Unexpected success - Sui orders should not allow signature retrieval');
+    } else {
+      console.log('✅ Correctly rejected signature request for Sui order');
+      console.log('   Error:', signatureResult.error.message);
     }
     console.log('');
   }
@@ -182,27 +192,106 @@ async function runTests() {
     console.log('');
   }
 
-  // Test 8: Verify Escrow
+  // Test 8: Verify Escrow (EVM Order)
   if (evmOrderHash) {
-    console.log('📝 Test 8: Verify Escrow');
+    console.log('📝 Test 8: Verify Escrow (EVM Order)');
     const verifyData = {
-      orderHash: evmOrderHash,
+      orderId: evmOrderHash,
       escrowSrc: '0x1111111111111111111111111111111111111111',
-      escrowDst: '0x2222222222222222222222222222222222222222',
-      verificationType: 'preflight',
-      details: {
-        txHash: '0x3333333333333333333333333333333333333333333333333333333333333333',
-        status: 'confirmed'
-      }
+      escrowDst: '0x2222222222222222222222222222222222222222222222222222222222222222'
     };
     
     const verifyResult = await apiCall('POST', '/verify', verifyData);
     if (verifyResult.success) {
-      console.log('✅ Escrow verification successful');
+      console.log('✅ Escrow verification completed');
       console.log('   Verified:', verifyResult.data.verified);
-      console.log('   Issues:', verifyResult.data.issues.length);
+      console.log('   Issues found:', verifyResult.data.issues.length);
+      if (verifyResult.data.issues.length > 0) {
+        console.log('   Issues:', verifyResult.data.issues.join(', '));
+      }
     } else {
       console.log('❌ Escrow verification failed:', verifyResult.error);
+    }
+    console.log('');
+  }
+
+  // Test 8.1: Verify Escrow (Sui Order)
+  if (suiOrderHash) {
+    console.log('📝 Test 8.1: Verify Escrow (Sui Order)');
+    const verifyData = {
+      orderId: suiOrderHash,
+      escrowSrc: '0x1111111111111111111111111111111111111111111111111111111111111111',
+      escrowDst: '0x2222222222222222222222222222222222222222'
+    };
+    
+    const verifyResult = await apiCall('POST', '/verify', verifyData);
+    if (verifyResult.success) {
+      console.log('✅ Escrow verification completed');
+      console.log('   Verified:', verifyResult.data.verified);
+      console.log('   Issues found:', verifyResult.data.issues.length);
+      if (verifyResult.data.issues.length > 0) {
+        console.log('   Issues:', verifyResult.data.issues.join(', '));
+      }
+    } else {
+      console.log('❌ Escrow verification failed:', verifyResult.error);
+    }
+    console.log('');
+  }
+
+  // Test 9: Submit Secret (EVM Order)
+  if (evmOrderHash) {
+    console.log('📝 Test 9: Submit Secret (EVM Order)');
+    const secretData = {
+      orderId: evmOrderHash,
+      secret: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+    };
+    
+    const secretResult = await apiCall('POST', '/secret', secretData);
+    if (secretResult.success) {
+      console.log('✅ Secret submitted successfully');
+      console.log('   Success:', secretResult.data.success);
+      console.log('   Status:', secretResult.data.status);
+      console.log('   Message:', secretResult.data.message);
+    } else {
+      console.log('❌ Secret submission failed:', secretResult.error);
+    }
+    console.log('');
+  }
+
+  // Test 9.1: Submit Secret (Sui Order)
+  if (suiOrderHash) {
+    console.log('📝 Test 9.1: Submit Secret (Sui Order)');
+    const secretData = {
+      orderId: suiOrderHash,
+      secret: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+    };
+    
+    const secretResult = await apiCall('POST', '/secret', secretData);
+    if (secretResult.success) {
+      console.log('✅ Secret submitted successfully');
+      console.log('   Success:', secretResult.data.success);
+      console.log('   Status:', secretResult.data.status);
+      console.log('   Message:', secretResult.data.message);
+    } else {
+      console.log('❌ Secret submission failed:', secretResult.error);
+    }
+    console.log('');
+  }
+
+  // Test 9.2: Try to submit secret again (should fail)
+  if (evmOrderHash) {
+    console.log('📝 Test 9.2: Submit Secret Again (should fail)');
+    const secretData = {
+      orderId: evmOrderHash,
+      secret: '0xdifferentsecret123456789'
+    };
+    
+    const secretResult = await apiCall('POST', '/secret', secretData);
+    if (secretResult.success) {
+      console.log('❌ Unexpected success - should not allow secret resubmission for PROCESSING order');
+    } else {
+      console.log('✅ Correctly rejected duplicate secret submission');
+      console.log('   Error:', secretResult.error.message);
     }
     console.log('');
   }

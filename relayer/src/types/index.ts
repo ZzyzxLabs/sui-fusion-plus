@@ -5,9 +5,11 @@
 export interface Order {
   id: string;
   chain: string;
+  targetChain: string;
   order: any;
   txHash: string;
   signature: string;
+  secret?: string;
   status: OrderStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -17,6 +19,7 @@ export interface Order {
 
 export enum OrderStatus {
   PENDING = 'pending',
+  VERIFIED = 'verified',
   PROCESSING = 'processing',
   COMPLETED = 'completed',
   FAILED = 'failed',
@@ -48,6 +51,7 @@ export interface SubmitOrderRequest {
 
 export interface SubmitOrderResponse {
   orderId: string;
+  orderHash?: string; // For backward compatibility
   status: OrderStatus;
   estimatedProcessingTime: number;
   fee: string;
@@ -70,4 +74,38 @@ export interface PaginatedResponse<T> {
     total: number;
     hasMore: boolean;
   };
+}
+
+export interface SignatureRequest {
+  orderId: string;
+  resolverId?: string;
+}
+
+export interface SignatureResponse {
+  orderId: string;
+  signature?: string;
+  targetChain: "sui" | "evm";
+  order: any;
+}
+
+export interface VerifyRequest {
+  orderId: string;
+  escrowSrc: string;
+  escrowDst: string;
+}
+
+export interface VerifyResponse {
+  verified: boolean;
+  issues: string[];
+}
+
+export interface SecretRequest {
+  orderId: string;
+  secret: string;
+}
+
+export interface SecretResponse {
+  success: boolean;
+  message: string;
+  status: OrderStatus;
 }
