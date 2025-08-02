@@ -4,7 +4,7 @@ import { bcs } from "@mysten/sui/bcs";
 const fill_order = (order, orderHash, winnerCap, safetyDeposit, hashlock, coinType) => {
     let tx = new Transaction();
     tx.moveCall({
-        target: `${package}::limit_order_protocol::fill_order`,
+        target: `${package}::resolver::deploy_src`,
         arguments: [
             tx.object(order),
             tx.pure(`vector<u8>`, orderHash),
