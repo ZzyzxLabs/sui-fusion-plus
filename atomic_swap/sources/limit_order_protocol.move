@@ -1,0 +1,165 @@
+// Copyright (c) 2025 Sui Fusion Plus
+// SPDX-License-Identifier: MIT
+
+module atomic_swap::limit_order_protocol;
+
+
+// === Imports ===
+use sui::event;
+use sui::dynamic_object_field as dof;
+use sui::coin::{Self, Coin, into_balance, from_balance};
+use sui::hash::{keccak256};
+use sui::clock::{timestamp_ms, Clock};
+use sui::balance::{Self, Balance};
+use sui::sui::SUI;
+use usdc::usdc::USDC;
+use atomic_swap::timelocks::{Self, Timelock};
+use atomic_swap::escrow_src::{Self, create_escrow_src};
+use std::string::{Self, String};
+
+// === Errors ===
+const EWrongOrder: u64 = 1;
+// === Structs ===
+/// Represents the protocol admin capabilities for atomic swaps.
+/// This object is used to manage protocol-level operations and is stored in the admin's account.
+public struct ProtocolCap has key, store {
+    id: UID,
+}
+/// Represents the winner of an auction in the atomic swap protocol.
+/// This struct holds the auction winner's ID and the amount they won.
+public struct Auction_Winner has key {
+    id: UID,
+    amount: u256,
+    order_id: ID
+}
+
+// TODO: Some Params Discussion
+public struct MakerTrait has key, store {
+    id: UID,
+}
+
+// Order When Sui is the Source Chain
+public struct Order<phantom T> has key{
+    id: UID,
+    salt: u256,
+    maker: address,
+    makerAsset: Balance<T>,
+    takerAsset: String,
+    makingAmount: u256,
+    takingAmount: u256,
+    makerTrait: MakerTrait,
+}
+
+public struct OrderCap has key, store {
+    id: UID,
+    order_id: ID
+}
+
+// === Init Functions ===
+fun init(
+    ctx: &mut TxContext
+) {
+    // Initialize the protocol capabilities and other necessary setup.
+    let protocol_cap = ProtocolCap {
+        id: object::new(ctx),
+    };
+    transfer::transfer(protocol_cap, ctx.sender());
+}
+
+// === Public Functions ===
+// maker creates a limit order for atomic swap
+public fun deploy_limit<T>(
+    in: Coin<T>,
+    out: String,
+    makingAmount: u256,
+    takingAmount: u256,
+    ctx: &mut TxContext
+) {
+    let makerTrait = MakerTrait {
+        id: object::new(ctx),
+    };
+    let limit_order = Order<T>{
+        id: object::new(ctx),
+        salt: 0,
+        maker: ctx.sender(),
+        makerAsset: into_balance(in),
+        takerAsset: out,
+        makingAmount: makingAmount,
+        takingAmount: takingAmount,
+        makerTrait: makerTrait,
+    };
+    let order_cap = OrderCap {
+        id: object::new(ctx),
+        order_id: object::id(&limit_order),
+    };
+    transfer::public_transfer(order_cap, ctx.sender());
+    transfer::share_object(limit_order);
+}
+
+// Relayer create an auction winner for the taker
+public fun mint_auction_winner<T>(
+    protocol_cap: &ProtocolCap,
+    order: &Order<T>,
+    amount: u256,
+    winner: address,
+    ctx: &mut TxContext
+) {
+    let auction_winner = Auction_Winner {
+        id: object::new(ctx),
+        order_id: object::id(order),
+        amount: amount,
+    };
+    transfer::transfer(auction_winner, winner);
+}
+
+// Taker fills an order in the atomic swap protocol with the auction winner.
+public fun fill_order<T>(
+    order: &mut Order<T>,
+    order_hash: vector<u8>,
+    winner: &Auction_Winner,
+    safetyDeposit: Coin<USDC>,
+    hashlock: vector<u8>,
+    clock: &Clock,
+    ctx: &mut TxContext
+) {
+    assert!(object::id(order) == winner.order_id, EWrongOrder);
+    let coin_to_escrow = coin::take<T>(&mut order.makerAsset, (winner.amount as u64), ctx);
+    let order_hash: vector<u8> = keccak256(&order_hash);
+    create_escrow_src<T>(
+        order_hash,
+        hashlock,
+        order.maker,
+        ctx.sender(),
+        coin_to_escrow,
+        safetyDeposit,
+        clock,
+        ctx
+    );
+}
+
+// Maker cancel an order onchain
+public fun cancel_order<T>(
+    order_cap: &OrderCap,
+    order: Order<T>,
+    ctx: &mut TxContext
+) {
+    assert!(object::id(&order) == order_cap.order_id, EWrongOrder);
+    let Order {
+        id,
+        salt: _,
+        maker: _,
+        makerAsset,
+        takerAsset: _,
+        makingAmount: _,
+        takingAmount: _,
+        makerTrait,
+    } = order;
+    transfer::public_transfer(from_balance(makerAsset, ctx), ctx.sender());
+    object::delete(id);
+    let MakerTrait {
+        id,
+    } = makerTrait;
+    object::delete(id);
+    
+
+}
