@@ -49,7 +49,7 @@ export function getLimitOrderV4Domain(chainId: number): EIP712DomainType {
     return {
         name: LimitOrderV4TypeDataName,
         version: LimitOrderV4TypeDataVersion,
-        chainId,
+        chainId: BigInt(chainId),
         verifyingContract: getLimitOrderContract(chainId)
     }
 }

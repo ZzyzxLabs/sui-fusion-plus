@@ -3,11 +3,18 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import Sdk from '@1inch/cross-chain-sdk';
-import { keccak256 } from 'ethers';
+import { UINT_40_MAX } from '@/cross-chain-sdk-custom/fusion-sdk/src';
+import { keccak256, parseEther, toUtf8Bytes, sha256 } from 'ethers';
 import { HashLock, MerkleLeaf } from '../cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order/hash-lock/hash-lock';
-import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
+import { CrossChainOrder } from '../cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order';
+import { Address, AuctionDetails, NetworkEnum } from '@1inch/fusion-sdk';
+import { TimeLocks } from '../cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order/time-locks';
+import { TRUE_ERC20, ESCROW_FACTORY } from '../cross-chain-sdk-custom/cross-chain-sdk/src/deployments';
+import { config } from './config';
+import { useAccount, useConnect, useDisconnect, useBalance, useSignTypedData } from 'wagmi';
 import { useWallet, ConnectButton } from '@suiet/wallet-kit';
+import { randBigInt } from '@/cross-chain-sdk-custom/limit-order-sdk/src/utils/rand-bigint';
+import { Network } from 'inspector/promises';
 
 const generateSecrets = (numParts: number) => {
   const secrets: string[] = [];
@@ -72,6 +79,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [orderAmount, setOrderAmount] = useState<string>('1');
   const [error, setError] = useState<string | null>(null);
+  const [signedSignature, setSignedSignature] = useState<string | null>(null);
 
 
   const { connect, connectors, error: wagmiError, isLoading: wagmiIsLoading, pendingConnector } = useConnect();
@@ -79,6 +87,7 @@ export default function Home() {
   const ethAccount = useAccount();
   const { data: balance } = useBalance({ address: ethAccount.address });
   const { connected, address, wallets, select, disconnect: disconnectSui } = useWallet();
+  const { signTypedDataAsync } = useSignTypedData();
 
   useEffect(() => {
     fetchExchangeRate();
@@ -125,7 +134,7 @@ export default function Home() {
     setEstimatedAmount('');
   };
 
-  const createOrder = () => {
+  const createOrder = async () => {
     // Check if we're in the browser
     if (typeof window === 'undefined') {
       return;
@@ -146,20 +155,110 @@ export default function Home() {
       return;
     }
 
+    if (srcChain !== 'ETH' || dstChain !== 'SUI') {
+      setError('This function only supports ETH as source and SUI as destination chain.');
+      return;
+    }
+
     try {
       // Calculate number of parts based on the order amount
       const numParts = Math.ceil(parseFloat(orderAmount));
 
       // Generate secrets and create HashLock details
       const secrets = generateSecrets(numParts);
-      const { secretHashes, merkleLeaves, merkleRoot } = createHashLockDetails(secrets);
 
-      // Create order hash using the merkle root
-      const encoder = new TextEncoder();
-      const orderHash = keccak256(encoder.encode(orderAmount + merkleRoot));
+      // const { secretHashes, merkleLeaves, merkleRoot } = createHashLockDetails(secrets);
 
+      // Create CrossChainOrder
+      if (!ethAccount.address || !address) {
+        setError('Please connect both ETH and SUI wallets.');
+        return;
+      }
+
+      const makerAddress = new Address(ethAccount.address);
+
+      const currentTimestamp = BigInt(Math.floor(Date.now() / 1000));
+      const salt = randBigInt(1_000_000_000); // Use randBigInt for SSR-safe random number generation
+
+      let dstNetworkEnum: NetworkEnum | number;
+      let takerAssetAddress: Address;
+
+
+      dstNetworkEnum = config.dstChainId; // SUI placeholder from config
+      takerAssetAddress = new Address(sha256(toUtf8Bytes(address)).substring(0, 42)); // Hash SUI address and take first 20 bytes
+
+      const order = CrossChainOrder.new(
+        new Address('0x0000000000000000000000000000000000000011'), // Placeholder for escrow factory address
+        {
+          makerAsset: TRUE_ERC20[config.srcChainId],
+          takerAsset: takerAssetAddress,
+          makingAmount: BigInt(Math.floor(amount)), // Assuming 18 decimals for ETH
+          takingAmount: BigInt(Math.floor(estimatedTokens)), // Assuming 9 decimals for SUI
+          maker: makerAddress,
+          salt: salt,
+        },
+        {
+          hashLock: HashLock.forSingleFill(secrets[0]),
+          timeLocks: TimeLocks.new({
+            srcWithdrawal: config.srcWithdrawal,
+            srcPublicWithdrawal: config.srcPublicWithdrawal,
+            srcCancellation: config.srcCancellation,
+            srcPublicCancellation: config.srcPublicCancellation,
+            dstWithdrawal: config.dstWithdrawal,
+            dstPublicWithdrawal: config.dstPublicWithdrawal,
+            dstCancellation: config.dstCancellation,
+          }),
+          srcChainId: config.srcChainId,
+          dstChainId: dstNetworkEnum,
+          srcSafetyDeposit: parseEther('0.001'),
+          dstSafetyDeposit: 0n
+        },
+        {
+          auction: new AuctionDetails({
+            initialRateBump: 0,
+            points: [],
+            duration: 120n,
+            startTime: currentTimestamp
+          }),
+          whitelist: [
+            {
+              address: new Address('0x0000000000000000000000000001100000000000'), // Placeholder for whitelisted
+              allowFrom: 0n
+            }
+          ],
+          resolvingStartTime: 0n,
+        },
+        {
+          nonce: randBigInt(UINT_40_MAX),
+          allowPartialFills: false,
+          allowMultipleFills: false,
+        }
+      );
+
+      console.log('Created CrossChainOrder:', order);
+
+      const orderHash = order.getOrderHash(config.srcChainId);
+      const typedData = order.getTypedData(config.srcChainId);
+
+      console.log('Order Hash:', orderHash);
+      console.log('Typed Data:', typedData);
+
+      console.log('Typed Data for signing:', typedData);
+      console.log('Attempting to sign typed data...');
+
+      const signature = await signTypedDataAsync({
+        domain: typedData.domain,
+        types: typedData.types,
+        primaryType: typedData.primaryType,
+        message: typedData.message,
+        account: ethAccount.address,
+      });
+
+
+      console.log('Order Signature:', signature);
 
     } catch (err) {
+      console.error('Failed to sign order:', err);
       setError('Failed to create order: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
