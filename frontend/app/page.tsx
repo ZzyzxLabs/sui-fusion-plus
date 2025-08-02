@@ -5,11 +5,11 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { UINT_40_MAX } from '@/cross-chain-sdk-custom/fusion-sdk/src';
 import { keccak256, parseEther, toUtf8Bytes, sha256 } from 'ethers';
-import { HashLock, MerkleLeaf } from '../cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order/hash-lock/hash-lock';
-import { CrossChainOrder } from '../cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order';
+import { HashLock, MerkleLeaf } from '@/cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order/hash-lock/hash-lock';
+import { CrossChainOrder } from '@/cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order';
 import { Address, AuctionDetails, NetworkEnum } from '@1inch/fusion-sdk';
-import { TimeLocks } from '../cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order/time-locks';
-import { TRUE_ERC20, ESCROW_FACTORY } from '../cross-chain-sdk-custom/cross-chain-sdk/src/deployments';
+import { TimeLocks } from '@/cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order/time-locks';
+import { TRUE_ERC20, ESCROW_FACTORY } from '@/cross-chain-sdk-custom/cross-chain-sdk/src/deployments';
 import { config } from './config';
 import { useAccount, useConnect, useDisconnect, useBalance, useSignTypedData } from 'wagmi';
 import { useWallet, ConnectButton } from '@suiet/wallet-kit';
@@ -24,23 +24,6 @@ const generateSecrets = (numParts: number) => {
     secrets.push('0x' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join(''));
   }
   return secrets;
-};
-
-const createHashLockDetails = (secrets: string[]) => {
-  // Calculate individual hashes for each secret
-  const secretHashes = secrets.map(secret => HashLock.hashSecret(secret));
-
-  // Generate merkle leaves using the HashLock utility
-  const merkleLeaves = HashLock.getMerkleLeavesFromSecretHashes(secretHashes);
-
-  // Create the HashLock instance for multiple fills
-  const hashLock = HashLock.forMultipleFills(merkleLeaves);
-
-  return {
-    secretHashes,
-    merkleLeaves,
-    merkleRoot: hashLock.toString()
-  };
 };
 
 const ChainIcon = ({ chain }: { chain: 'ETH' | 'SUI' }) => {
@@ -86,7 +69,7 @@ export default function Home() {
   const { disconnect } = useDisconnect();
   const ethAccount = useAccount();
   const { data: balance } = useBalance({ address: ethAccount.address });
-  const { connected, address, wallets, select, disconnect: disconnectSui } = useWallet();
+  const { connected, address, wallets, select, disconnect: disconnectSui, signMessage } = useWallet();
   const { signTypedDataAsync } = useSignTypedData();
 
   useEffect(() => {
@@ -134,7 +117,7 @@ export default function Home() {
     setEstimatedAmount('');
   };
 
-  const createOrder = async () => {
+  const createEVMOrder = async () => {
     // Check if we're in the browser
     if (typeof window === 'undefined') {
       return;
@@ -261,6 +244,10 @@ export default function Home() {
       console.error('Failed to sign order:', err);
       setError('Failed to create order: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
+  };
+
+  const createSUIOrder = async () => {
+
   };
 
   const handleAmountChange = (value: string) => {
@@ -392,7 +379,7 @@ export default function Home() {
           {/* Create Order Button */}
           <div className="flex justify-center">
             <button
-              onClick={createOrder}
+              onClick={srcChain === 'ETH' ? createEVMOrder : createSUIOrder}
               className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isLoading}
             >
