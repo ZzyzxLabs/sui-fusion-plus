@@ -12,8 +12,8 @@ import { TimeLocks } from '@/cross-chain-sdk-custom/cross-chain-sdk/src/cross-ch
 import { TRUE_ERC20, ESCROW_FACTORY } from '@/cross-chain-sdk-custom/cross-chain-sdk/src/deployments';
 import { config } from './config';
 import { useAccount, useConnect, useDisconnect, useBalance, useSignTypedData } from 'wagmi';
-import { useWallet, ConnectButton } from '@suiet/wallet-kit';
-import { randBigInt } from '@/cross-chain-sdk-custom/limit-order-sdk/src/utils/rand-bigint';
+
+import { randBiInt } from '@/cross-chain-sdk-custom/limit-order-sdk/src/utils/rand-bigint';
 import { Network } from 'inspector/promises';
 import {
   useCurrentAccount,
@@ -23,6 +23,7 @@ import {
   useSuiClient,
   useSuiClientQueries,
 } from "@mysten/dapp-kit";
+import { ConnectButton } from "@mysten/dapp-kit";
 import { placeLimit } from './utils/place_limit';
 const generateSecrets = (numParts: number) => {
   const secrets: string[] = [];
@@ -98,7 +99,7 @@ export default function Home() {
   const { disconnect } = useDisconnect();
   const ethAccount = useAccount();
   const { data: balance } = useBalance({ address: ethAccount.address });
-  const { connected, address, wallets, select, disconnect: disconnectSui, signMessage } = useWallet();
+
   const { signTypedDataAsync } = useSignTypedData();
 
   useEffect(() => {
@@ -307,19 +308,7 @@ export default function Home() {
             )}
 
             {/* SUI Wallet Connection */}
-            {connected ? (
-              <div className="flex items-center justify-between w-full py-2 px-4 bg-gray-200 text-black rounded-lg font-medium">
-                <span>{`${address?.slice(0, 6)}...${address?.slice(-4)}`}</span>
-                <button onClick={() => disconnectSui()} className="py-1 px-2 bg-red-500 text-white rounded-md">Disconnect</button>
-              </div>
-            ) : (
-              <button
-                onClick={() => select('Slush')}
-                className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Connect SUI Wallet
-              </button>
-            )}
+              <ConnectButton />
           </div>
 
           {/* Source Token Input */}
@@ -419,7 +408,7 @@ export default function Home() {
           {/* Wallet Info */}
           <div className="text-center text-sm text-gray-500 dark:text-gray-400">
             {ethAccount.isConnected && <div>ETH: {ethAccount.address}</div>}
-            {connected && <div>SUI: {address}</div>}
+
           </div>
         </div>
       </div>
