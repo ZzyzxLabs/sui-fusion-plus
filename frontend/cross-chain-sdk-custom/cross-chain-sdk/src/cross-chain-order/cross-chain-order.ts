@@ -226,7 +226,9 @@ export class CrossChainOrder {
     }
 
     public getTypedData(srcChainId: number): EIP712TypedData {
-        return this.inner.getTypedData(srcChainId)
+        const typedData = this.inner.getTypedData(srcChainId);
+        typedData.domain.chainId = srcChainId;
+        return typedData;
     }
 
     public getCalculator(): AuctionCalculator {
