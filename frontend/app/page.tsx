@@ -170,6 +170,21 @@ export default function Home() {
     }
   };
 
+  const safeExtractObjectIds = (coins) => {
+    if (!coins) {
+      console.log("No coins provided");
+      return [];
+    }
+    
+    if (!Array.isArray(coins)) {
+      console.log("Coins is not an array:", typeof coins);
+      return [];
+    }
+    
+    return coins
+      .filter(coin => coin && coin.data && coin.data.objectId)
+      .map(coin => coin.data.objectId);
+  };
 
   const getCoinId = (chain: 'ETH' | 'SUI') => {
     return chain === 'ETH' ? 'ethereum' : 'sui';
@@ -321,7 +336,31 @@ export default function Home() {
 
   const createSUIOrder = async () => {
     const matchingCoins = findMatchingCoins();
-    console.log("Found matching coins:", matchingCoins);
+    const coinObjectIds = safeExtractObjectIds(matchingCoins);
+    if (coinObjectIds.length === 0) {
+      setError('No matching SUI coins found in your wallet.');
+      return;
+    }
+    let tx = placeLimit(
+      coinObjectIds,
+      "ETH",
+      parseFloat(amount) * 1e9, // Convert to SUI's smallest unit
+      parseFloat(estimatedAmount) * 1e9, // Convert to SUI's smallest unit
+      "0x2::sui::SUI"
+    );
+    signAndExecuteTransaction({
+      transaction: tx,
+      chain: "sui:testnet", // Specify the chain you want to execute on
+    },
+    {
+      onSuccess: (result) => {
+        console.log('Transaction executed successfully:', result);
+      },
+      onError: (error) => {
+        console.error('Transaction execution failed:', error);
+        setError('Transaction execution failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      }
+    });
   };
 
   const handleAmountChange = (value: string) => {

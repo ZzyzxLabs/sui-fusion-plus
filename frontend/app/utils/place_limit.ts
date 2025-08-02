@@ -1,6 +1,6 @@
 import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 import { bcs } from "@mysten/sui/bcs";
-
+import { package_addr } from './package';
 export const placeLimit = (inCoin, outCoin, makingAmount, takingAmount, coinType) => {
     let tx = new Transaction();
     if (coinType === "0x2::sui::SUI") {
@@ -14,7 +14,7 @@ export const placeLimit = (inCoin, outCoin, makingAmount, takingAmount, coinType
         const making = bcs.u256().serialize(makingAmount);
         const taking = bcs.u256().serialize(takingAmount);
         tx.moveCall({
-        target: `${package}::limit_order_protocol::deploy_limit`,
+        target: `${package_addr}::limit_order_protocol::deploy_limit`,
         arguments: [
             sui,
             tx.pure(out),
@@ -39,7 +39,7 @@ export const placeLimit = (inCoin, outCoin, makingAmount, takingAmount, coinType
         const making = bcs.u256().serialize(makingAmount);
         const taking = bcs.u256().serialize(takingAmount);
         tx.moveCall({
-        target: `${package}::limit_order_protocol::deploy_limit`,
+        target: `${package_addr}::limit_order_protocol::deploy_limit`,
             arguments: [
                 finalCoin,
                 tx.pure(out),
