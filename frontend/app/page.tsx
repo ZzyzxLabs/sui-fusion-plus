@@ -105,7 +105,49 @@ export default function Home() {
   useEffect(() => {
     fetchExchangeRate();
   }, [srcChain, dstChain]);
+  
+  function normalizeType(typeStr) {
+    return typeStr.replace(/^0x0+/, "0x");
+  }
 
+  const vaultAndCap = useSuiClientQuery(
+    "getOwnedObjects",
+    {
+      owner: account?.address,
+      options: { showType: true, showContent: true },
+    },
+    {
+      enabled: !!account,
+    }
+  );
+
+  const findMatchingCoins = () => {
+    // 直接固定目標 coinType
+    const targetCoinType = normalizeType("0x2::sui::SUI");
+
+    // 遍歷資料並比對
+    const matchingCoins =
+      vaultAndCap.data?.data.filter((obj) => {
+        const objType = obj.data?.type;
+        if (!objType) return false;
+
+        // 從 < > 中抽取 coin type
+        const match = objType.match(/<([^>]+)>/);
+        if (match && match[1]) {
+          const extractedCoinType = normalizeType(match[1]);
+          console.log(
+            `Matching: extracted coin type = ${extractedCoinType}, target = ${targetCoinType}`
+          );
+
+          return extractedCoinType === targetCoinType;
+        }
+        return false;
+      }) || [];
+
+    console.log(`Found ${matchingCoins.length} matching coins`, matchingCoins, targetCoinType);
+
+    return matchingCoins;
+  };
   const fetchExchangeRate = async () => {
     setIsLoading(true);
     try {
@@ -127,6 +169,7 @@ export default function Home() {
       setIsLoading(false);
     }
   };
+
 
   const getCoinId = (chain: 'ETH' | 'SUI') => {
     return chain === 'ETH' ? 'ethereum' : 'sui';
@@ -277,7 +320,8 @@ export default function Home() {
   };
 
   const createSUIOrder = async () => {
-
+    const matchingCoins = findMatchingCoins();
+    console.log("Found matching coins:", matchingCoins);
   };
 
   const handleAmountChange = (value: string) => {
