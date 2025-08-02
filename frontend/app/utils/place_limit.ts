@@ -1,7 +1,7 @@
 import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 import { bcs } from "@mysten/sui/bcs";
 
-const placeLimit = (inCoin, outCoin, makingAmount, takingAmount, coinType) => {
+export const placeLimit = (inCoin, outCoin, makingAmount, takingAmount, coinType) => {
     let tx = new Transaction();
     if (coinType === "0x2::sui::SUI") {
         

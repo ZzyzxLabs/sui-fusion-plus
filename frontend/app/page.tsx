@@ -15,7 +15,15 @@ import { useAccount, useConnect, useDisconnect, useBalance, useSignTypedData } f
 import { useWallet, ConnectButton } from '@suiet/wallet-kit';
 import { randBigInt } from '@/cross-chain-sdk-custom/limit-order-sdk/src/utils/rand-bigint';
 import { Network } from 'inspector/promises';
-
+import {
+  useCurrentAccount,
+  useSignAndExecuteTransaction,
+  useSuiClientQuery,
+  useAutoConnectWallet,
+  useSuiClient,
+  useSuiClientQueries,
+} from "@mysten/dapp-kit";
+import { placeLimit } from './utils/place_limit';
 const generateSecrets = (numParts: number) => {
   const secrets: string[] = [];
   for (let i = 0; i < numParts; i++) {
@@ -63,8 +71,29 @@ export default function Home() {
   const [orderAmount, setOrderAmount] = useState<string>('1');
   const [error, setError] = useState<string | null>(null);
   const [signedSignature, setSignedSignature] = useState<string | null>(null);
+  
+  
+  //sui things
+  const suiClient = useSuiClient();
+  const account = useCurrentAccount();
+  const autoConnectionStatus = useAutoConnectWallet();
+  // Use the hook with custom execute function to get more detailed transaction results
+  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction({
+    execute: async ({ bytes, signature }) =>
+      await suiClient.executeTransactionBlock({
+        transactionBlock: bytes,
+        signature,
+        options: {
+          showEffects: true,
+          showEvents: true,
+          showObjectChanges: true,
+          showBalanceChanges: true,
+          showRawEffects: true,
+        },
+      }),
+  });  // Get fuseTxFunctions from store
 
-
+  
   const { connect, connectors, error: wagmiError, isLoading: wagmiIsLoading, pendingConnector } = useConnect();
   const { disconnect } = useDisconnect();
   const ethAccount = useAccount();
