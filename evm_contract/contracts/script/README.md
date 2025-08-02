@@ -1,0 +1,1 @@
+forge script contracts/script/DeployEscrowFactory.s.sol:DeployEscrowFactory --rpc-url https://ethereum-sepolia-rpc.publicnode.com --private-key PRIVATE_KEY --broadcast
