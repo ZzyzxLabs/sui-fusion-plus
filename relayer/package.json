@@ -1,0 +1,50 @@
+{
+  "name": "relayer",
+  "version": "1.0.0",
+  "description": "Cross-chain relayer service for SUI Fusion Plus",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "dev:watch": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "type-check": "tsc --noEmit",
+    "build-custom": "cd ../cross-chain-sdk-custom/cross-chain-sdk && npm run build"
+  },
+  "keywords": [
+    "relayer",
+    "cross-chain",
+    "sui",
+    "fusion",
+    "express",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
+    "cross-chain-sdk-custom": "file:../cross-chain-sdk-custom/cross-chain-sdk"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.23",
+    "@types/helmet": "^0.0.48",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^24.1.0",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.9.2"
+  }
+}
