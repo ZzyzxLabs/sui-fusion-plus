@@ -482,7 +482,7 @@ export default function Home() {
         trait,
         args,
       ]),
-      value: Number(orderToSubmit.escrowExtension.srcSafetyDeposit) // Convert to ETH
+      value: orderToSubmit.escrowExtension.srcSafetyDeposit.toString() // Convert to ETH
     }
 
     try {
