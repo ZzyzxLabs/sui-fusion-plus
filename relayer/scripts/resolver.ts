@@ -5,6 +5,7 @@ import { Order, OrderStatus } from '../src/types';
 import { SuiInteraction, EvmInteraction, createChainInteractions } from '../src/utils/chainInteraction';
 import { SdkEvmInteraction } from '../src/utils/evmResolver';
 import { logger, LogLevel } from '../src/utils/logger';
+import * as Sdk from 'cross-chain-sdk-custom';
 
 // Load environment variables
 dotenv.config();
@@ -321,12 +322,17 @@ class ResolverService {
     logger.info('Withdrawing from Sui escrow', { escrowAddress: escrow.escrowAddress, side }, { orderId });
     
     try {
-      // Note: This is a simplified implementation
-      // In production, you would need to implement Sui withdrawal logic
-      logger.warn('Sui withdrawal not fully implemented', null, { orderId });
-      
-      // TODO: Implement Sui withdrawal
-      // await this.chainInteractions.sui.withdraw(escrow.escrowAddress, secret, side);
+      const result = await this.chainInteractions.sui.withdrawFromEscrow({
+        immutables: escrow.srcImmutables,
+        escrowId: escrow.escrowAddress,
+        secret: secret,
+        coinType: '0x2::sui::SUI' // Assuming SUI for now, could be made dynamic
+      });
+
+      logger.info('Sui withdrawal completed', {
+        txHash: result.txHash,
+        side
+      }, { orderId });
       
     } catch (error) {
       logger.error('Failed to withdraw from Sui escrow', error, { orderId });  
@@ -390,7 +396,7 @@ class ResolverService {
         direction,
         sourceChain,
         targetChain,
-        resolver: 'resolver_address', // This should come from the response
+        resolver: this.chainInteractions.sui.getAddress(), // Get actual Sui address from private key
         auctionPrice: order.amount || '0'
       };
     } catch (error) {
@@ -426,13 +432,20 @@ class ResolverService {
         sourceEscrow = await this.deployEvmEscrow(order, auctionInfo, 'source');
         
         logger.debug('Deploying destination escrow on Sui', null, { orderId, chain: 'sui' });
-        // destinationEscrow = await this.deploySuiEscrow(order, auctionInfo, 'destination');
+        // Pass srcImmutables and dstImmutablesComplement from EVM source deployment to Sui destination deployment
+        destinationEscrow = await this.deploySuiEscrow(
+          order, 
+          auctionInfo, 
+          'destination', 
+          sourceEscrow.srcImmutables,
+          sourceEscrow.dstImmutablesComplement
+        );
 
       }
 
       return {
         source: sourceEscrow,
-        destination: sourceEscrow
+        destination: destinationEscrow  // Fix: was sourceEscrow, should be destinationEscrow
       };
     } catch (error) {
       logger.error('Failed to prepare escrows', error, { orderId });
@@ -446,52 +459,50 @@ class ResolverService {
   private async deploySuiEscrow(
     order: Order, 
     auctionInfo: AuctionInfo, 
-    type: 'source' | 'destination'
+    type: 'source' | 'destination',
+    srcImmutables?: Sdk.Immutables,
+    dstImmutablesComplement?: Sdk.DstImmutablesComplement
   ): Promise<EscrowDeployment> {
     const orderId = order.id;
     
     try {
       if (type === 'source') {
-        // Generate placeholder values - these should come from the order and auction info
-        const orderHash = new Uint8Array(32); // Should be derived from order
-        const hashlock = new Uint8Array(32); // Should be generated or provided
-        
-        const result = await this.chainInteractions.sui.deploySourceEscrow({
-          order: order.order,
-          orderHash,
-          winnerCap: '', // Should be provided from auction winner
-          safetyDeposit: '', // Should be provided from configuration
-          hashlock,
-          coinType: '0x2::sui::SUI'
-        });
-
-        logger.info('Sui source escrow deployed', result, { 
-          orderId, 
-          chain: 'sui', 
-          txHash: result.txHash 
-        });
-
-        return {
-          escrowAddress: result.escrowId,
-          transactionHash: result.txHash,
-          chain: 'sui'
-        };
+        // For source escrow on Sui (when direction is sui-to-evm)
+        throw new Error('Sui source escrow deployment not yet implemented');
       } else {
-        // Deploy destination escrow
-        const orderHash = new Uint8Array(32); // Should be derived from order
-        const hashlock = new Uint8Array(32); // Should be generated or provided
-        
+        // Deploy destination escrow on Sui (when direction is evm-to-sui)
+        if (!srcImmutables) {
+          throw new Error('srcImmutables required for Sui destination escrow deployment');
+        }
+
+        // Convert hex strings to Uint8Array
+        const orderHashBytes = new Uint8Array(
+          srcImmutables.orderHash.slice(2).match(/.{2}/g)!.map((byte: string) => parseInt(byte, 16))
+        );
+        const hashlockBytes = new Uint8Array(
+          srcImmutables.hashLock.toString().slice(2).match(/.{2}/g)!.map((byte: string) => parseInt(byte, 16))
+        );
+
+        logger.debug('Preparing Sui destination escrow deployment', {
+          orderHash: srcImmutables.orderHash,
+          hashlock: srcImmutables.hashLock.toString(),
+          maker: srcImmutables.maker.toString(),
+          resolver: auctionInfo.resolver
+        }, { orderId });
+
+        // Use actual amounts from dstImmutablesComplement if available
+        const dstAmount = dstImmutablesComplement?.amount || BigInt(990000);
+
         const result = await this.chainInteractions.sui.deployDestinationEscrow({
-          orderHash,
-          hashlock,
-          maker: order.order.maker || '',
-          resolver: auctionInfo.resolver,
-          dstCoin: '', // Should be provided from order
-          safetyDeposit: '', // Should be provided from configuration
+          orderHash: orderHashBytes,
+          hashlock: hashlockBytes,
+          maker: srcImmutables.maker.toString(), // EVM maker becomes Sui maker
+          resolver: auctionInfo.resolver, // Resolver address
+          dstAmount: dstAmount, // Amount from dstImmutablesComplement
           coinType: '0x2::sui::SUI'
         });
 
-        logger.info('Sui destination escrow deployed', result, { 
+        logger.info('[sui] Sui destination escrow deployed successfully', result, { 
           orderId, 
           chain: 'sui', 
           txHash: result.txHash 
@@ -500,6 +511,7 @@ class ResolverService {
         return {
           escrowAddress: result.escrowId,
           transactionHash: result.txHash,
+          srcImmutables:result.result,
           chain: 'sui'
         };
       }

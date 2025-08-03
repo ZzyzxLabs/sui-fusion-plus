@@ -27,6 +27,13 @@ export class SuiInteraction {
   }
 
   /**
+   * Get the Sui address for the current keypair
+   */
+  getAddress(): string {
+    return this.keypair.getPublicKey().toSuiAddress();
+  }
+
+  /**
    * Deploy source escrow on Sui
    */
   async deploySourceEscrow(params: {
@@ -45,7 +52,6 @@ export class SuiInteraction {
         tx.object(params.order),
         tx.pure('vector<u8>', Array.from(params.orderHash)),
         tx.object(params.winnerCap),
-        tx.object(params.safetyDeposit),
         tx.pure('vector<u8>', Array.from(params.hashlock))
       ],
       typeArguments: [params.coinType]
@@ -82,27 +88,48 @@ export class SuiInteraction {
 
   /**
    * Deploy destination escrow on Sui
+   * Based on deployed contract signature: deploy_dst(order_hash, hashlock, maker, resolver, dst_coin, clock, ctx)
    */
   async deployDestinationEscrow(params: {
     orderHash: Uint8Array;
     hashlock: Uint8Array;
     maker: string;
     resolver: string;
-    dstCoin: string;
-    safetyDeposit: string;
+    dstAmount: bigint;
     coinType: string;
-  }): Promise<{ escrowId: string; txHash: string }> {
+  }): Promise<{ escrowId: string; txHash: string, result: any }> {
+    console.log('deployDestinationEscrow', params);
     const tx = new Transaction();
+    
+    let splitDstCoin;
+    
+    // Special handling for SUI coins to avoid gas conflicts
+    if (params.coinType === '0x2::sui::SUI') {
+      // For SUI, split from the gas coin to avoid conflicts
+      [splitDstCoin] = tx.splitCoins(tx.gas, [params.dstAmount]);
+    } else {
+      // For other coin types, get coins from wallet and split normally
+      const coins = await this.client.getCoins({
+        owner: this.getAddress(),
+        coinType: params.coinType
+      });
+
+      if (coins.data.length < 1) {
+        throw new Error(`Insufficient ${params.coinType} coins in resolver wallet for dst_token`);
+      }
+
+      [splitDstCoin] = tx.splitCoins(tx.object(coins.data[0].coinObjectId), [params.dstAmount]);
+    }
     
     tx.moveCall({
       target: `${this.packageId}::resolver::deploy_dst`,
       arguments: [
         tx.pure('vector<u8>', Array.from(params.orderHash)),
         tx.pure('vector<u8>', Array.from(params.hashlock)),
-        tx.pure.address(params.maker),
+        tx.pure.address('0xbab2e67782112ba74979cdd861a29b746af3793017cbc7b931af2fecc9480218'),
         tx.pure.address(params.resolver),
-        tx.object(params.dstCoin),
-        tx.object(params.safetyDeposit)
+        splitDstCoin,
+        tx.object('0x6') // Clock object
       ],
       typeArguments: [params.coinType]
     });
@@ -115,6 +142,7 @@ export class SuiInteraction {
         showObjectChanges: true
       }
     });
+    console.log('deployDestinationEscrow result', result);
 
     if (result.effects?.status?.status !== 'success') {
       throw new Error(`Sui transaction failed: ${result.effects?.status?.error}`);
@@ -132,7 +160,8 @@ export class SuiInteraction {
 
     return {
       escrowId: escrowObject.reference!.objectId,
-      txHash: result.digest
+      txHash: result.digest,
+      result: result
     };
   }
 
@@ -281,6 +310,100 @@ export class SuiInteraction {
 
     return false;
   }
+
+  /**
+   * Withdraw from Sui destination escrow using secret
+   * Based on: withdraw<T0>(escrow, secret, timelock, clock, ctx)
+   */
+  async withdrawFromEscrow(params: {
+    immutables: any;
+    escrowId: string;
+    secret: string;
+    coinType: string;
+  }): Promise<{ txHash: string }> {
+    const tx = new Transaction();
+    console.log('withdrawFromEscrow', JSON.stringify(params.immutables, null, 2));
+
+    console.log('immutables', params.immutables.objectChanges,typeof params.immutables, typeof params.immutables.objectChanges);
+    const { timelocks, escrowDsts } = await this.extractTimelockAndEscrowDst(params.immutables);
+    
+    // Convert secret from hex string to Uint8Array
+    const secretBytes = new Uint8Array(
+      params.secret.slice(2).match(/.{2}/g)!.map((byte: string) => parseInt(byte, 16))
+    );
+
+    // Query for timelock objects related to this escrow
+    // In practice, you'd need to find the specific timelock for this escrow ID
+    // const timelockObjects = await this.client.getOwnedObjects({
+    //   owner: this.getAddress(),
+    //   filter: {
+    //     StructType: `${this.packageId}::timelocks::Timelock`
+    //   },
+    //   options: {
+    //     showContent: true
+    //   }
+    // });
+
+    // if (timelockObjects.data.length === 0) {
+    //   throw new Error('No timelock objects found for this resolver');
+    // }
+
+    // For now, use the first timelock (in production, match by escrow ID)
+   
+
+    console.log(`🔓 Withdrawing from Sui escrow: ${escrowDsts}`);
+    console.log(`🔑 Using secret: ${params.secret.slice(0, 10)}...`);
+    console.log(`⏰ Using timelock: ${timelocks}`);
+
+    tx.moveCall({
+      target: `${this.packageId}::escrow_dst::withdraw`,
+      arguments: [
+        tx.object(escrowDsts),           // escrow
+        tx.pure('vector<u8>', Array.from(secretBytes)), // secret
+        tx.object(timelocks),                // timelock
+        tx.object('0x6'),                     // clock
+      ],
+      typeArguments: [params.coinType]
+    });
+
+    const result = await this.client.signAndExecuteTransaction({
+      transaction: tx,
+      signer: this.keypair,
+      options: {
+        showEffects: true,
+        showEvents: true,
+        showObjectChanges: true
+      }
+    });
+
+    if (result.effects?.status?.status !== 'success') {
+      throw new Error(`Sui withdrawal failed: ${result.effects?.status?.error}`);
+    }
+
+    console.log(`✅ Sui withdrawal successful: ${result.digest}`);
+
+    return {
+      txHash: result.digest
+    };
+  }
+  async extractTimelockAndEscrowDst(result: any) {
+    const timelockStruct = this.packageId+'::timelocks::Timelock';
+    const escrowDstPrefix = this.packageId+'::escrow_dst::EscrowDst<0x2::sui::SUI>';
+    console.log('extractTimelockAndEscrowDst', result.objectChanges);
+    const timelocks = result.objectChanges.filter(
+      (oc: any) => oc.objectType === timelockStruct && oc.type === 'created'
+    );
+  
+    const escrowDsts = result.objectChanges.filter(
+      (oc: any) => oc.objectType.startsWith(escrowDstPrefix) && oc.type === 'created'
+    );
+  
+    return {
+      timelocks: timelocks[0].objectId,
+      escrowDsts: escrowDsts[0].objectId,
+    };
+  }
+  
 }
 
 /**
