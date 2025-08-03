@@ -499,6 +499,7 @@ function isEvmChain(chainId: NetworkEnum): boolean {
 // Execute main function
 // Check if this file is being run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
+  
   main()
     .then(() => {
       console.log('Example completed successfully');
