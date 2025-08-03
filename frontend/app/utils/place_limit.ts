@@ -14,7 +14,7 @@ export const placeLimit = (inCoin, outCoin, makingAmount, takingAmount, coinType
         const making = bcs.u256().serialize(makingAmount);
         const taking = bcs.u256().serialize(takingAmount);
         tx.moveCall({
-        target: `${package_addr}::limit_order_protocol::deploy_limit`,
+        target: `${package_addr}::limit_order_protocol::create_order`,
         arguments: [
             sui,
             tx.pure(out),
@@ -39,7 +39,7 @@ export const placeLimit = (inCoin, outCoin, makingAmount, takingAmount, coinType
         const making = bcs.u256().serialize(makingAmount);
         const taking = bcs.u256().serialize(takingAmount);
         tx.moveCall({
-        target: `${package_addr}::limit_order_protocol::deploy_limit`,
+        target: `${package_addr}::limit_order_protocol::create_order`,
             arguments: [
                 finalCoin,
                 tx.pure(out),
