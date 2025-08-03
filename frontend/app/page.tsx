@@ -94,6 +94,9 @@ export default function Home() {
   const [orderAmount, setOrderAmount] = useState<string>("1");
   const [error, setError] = useState<string | null>(null);
   const [signedSignature, setSignedSignature] = useState<string | null>(null);
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupMessage, setPopupMessage] = useState("");
+
 
   //sui things
   const suiClient = useSuiClient();
@@ -114,6 +117,24 @@ export default function Home() {
         },
       }),
   }); // Get fuseTxFunctions from store
+
+  const Popup = ({ message, onClose }: { message: string; onClose: () => void }) => {
+  return (
+      <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg text-center max-w-sm w-full">
+          <p className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+            {message}
+          </p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const {
     connect,
@@ -362,6 +383,8 @@ export default function Home() {
       });
 
       console.log("Order Signature:", signature);
+      setPopupMessage("ETH Order created successfully!");
+      setShowPopup(true);
     } catch (err) {
       console.error("Failed to sign order:", err);
       setError(
@@ -393,6 +416,8 @@ export default function Home() {
       {
         onSuccess: (result) => {
           console.log("Transaction executed successfully:", result);
+            setPopupMessage("SUI Order created successfully!");
+            setShowPopup(true);
         },
         onError: (error) => {
           console.error("Transaction execution failed:", error);
@@ -413,6 +438,9 @@ export default function Home() {
 
   return (
     <main className='flex min-h-screen flex-col items-center justify-center p-24'>
+      {showPopup && (
+        <Popup message={popupMessage} onClose={() => setShowPopup(false)} />
+      )}
       <div className='w-full max-w-md p-6 bg-white rounded-xl shadow-lg dark:bg-gray-800'>
         <div className='space-y-4'>
           {/* Connect Buttons */}
