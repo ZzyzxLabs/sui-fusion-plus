@@ -1,7 +1,7 @@
 import { Transaction } from '@mysten/sui/transactions';
 import { bcs } from "@mysten/sui/bcs";
 
-const deploy_dst = (orderHash, hashlock, maker, resolver, dst_coin, safetyDeposit, coinType) => {
+const deploy_dst = (orderHash, hashlock, maker, resolver, dst_coin, coinType) => {
     let tx = new Transaction();
     tx.moveCall({
         target: `${package}::resolver::deploy_dst`,
@@ -11,7 +11,6 @@ const deploy_dst = (orderHash, hashlock, maker, resolver, dst_coin, safetyDeposi
             tx.pure.address(maker),
             tx.pure.address(resolver),
             tx.object(dst_coin),
-            tx.object(safetyDeposit)
         ],
         typeArguments: [coinType]
     });

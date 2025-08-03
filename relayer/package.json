@@ -19,7 +19,7 @@
     "build-custom": "cd ../cross-chain-sdk-custom/cross-chain-sdk && npm run build",
     "build-sdk": "cd ../cross-chain-sdk-custom/cross-chain-sdk && npm run build",
     "build-all": "npm run build-sdk && npm run build",
-    "dev-with-sdk": "npm run build-sdk && npm run dev",
+    "dev-with-sdk": "npm run build-sdk && npm run dev"
   },
   "keywords": [
     "relayer",
