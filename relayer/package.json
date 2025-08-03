@@ -3,19 +3,21 @@
   "version": "1.0.0",
   "description": "Cross-chain relayer service for SUI Fusion Plus",
   "main": "dist/index.js",
-  "type": "module",
   "scripts": {
     "example": "tsx scripts/example.ts",
     "example:node": "node --loader ts-node/esm --experimental-specifier-resolution=node scripts/example.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon --exec ts-node src/index.ts",
-    "dev:watch": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
+    "dev": "nodemon --exec tsx src/index.ts",
+    "dev:watch": "nodemon --watch src --ext ts --exec tsx src/index.ts",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "test": "echo \"Error: no test specified\" && exit 1",
     "type-check": "tsc --noEmit",
-    "build-custom": "cd ../cross-chain-sdk-custom/cross-chain-sdk && npm run build"
+    "build-custom": "cd ../cross-chain-sdk-custom/cross-chain-sdk && npm run build",
+    "build-sdk": "cd ../cross-chain-sdk-custom/cross-chain-sdk && npm run build",
+    "build-all": "npm run build-sdk && npm run build",
+    "dev-with-sdk": "npm run build-sdk && npm run dev"
   },
   "keywords": [
     "relayer",

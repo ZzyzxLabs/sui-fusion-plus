@@ -24,7 +24,7 @@ import {
   useSignTypedData,
 } from "wagmi";
 
-import { randBiInt } from "@/cross-chain-sdk-custom/limit-order-sdk/src/utils/rand-bigint";
+import { randBigInt } from "@/cross-chain-sdk-custom/limit-order-sdk/src/utils/rand-bigint";
 import { Network } from "inspector/promises";
 import {
   useCurrentAccount,
@@ -43,9 +43,9 @@ const generateSecrets = (numParts: number) => {
     window.crypto.getRandomValues(randomBytes);
     secrets.push(
       "0x" +
-        Array.from(randomBytes)
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("")
+      Array.from(randomBytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
     );
   }
   return secrets;
@@ -125,7 +125,6 @@ export default function Home() {
   const { disconnect } = useDisconnect();
   const ethAccount = useAccount();
   const { data: balance } = useBalance({ address: ethAccount.address });
-
   const { signTypedDataAsync } = useSignTypedData();
 
   useEffect(() => {
@@ -275,7 +274,7 @@ export default function Home() {
       // const { secretHashes, merkleLeaves, merkleRoot } = createHashLockDetails(secrets);
 
       // Create CrossChainOrder
-      if (!ethAccount.address || !address) {
+      if (!ethAccount.address || !account?.address) {
         setError("Please connect both ETH and SUI wallets.");
         return;
       }
@@ -290,7 +289,7 @@ export default function Home() {
 
       dstNetworkEnum = config.dstChainId; // SUI placeholder from config
       takerAssetAddress = new Address(
-        sha256(toUtf8Bytes(address)).substring(0, 42)
+        sha256(toUtf8Bytes(account.address)).substring(0, 42)
       ); // Hash SUI address and take first 20 bytes
 
       const order = CrossChainOrder.new(
@@ -367,7 +366,7 @@ export default function Home() {
       console.error("Failed to sign order:", err);
       setError(
         "Failed to create order: " +
-          (err instanceof Error ? err.message : "Unknown error")
+        (err instanceof Error ? err.message : "Unknown error")
       );
     }
   };
@@ -399,7 +398,7 @@ export default function Home() {
           console.error("Transaction execution failed:", error);
           setError(
             "Transaction execution failed: " +
-              (error instanceof Error ? error.message : "Unknown error")
+            (error instanceof Error ? error.message : "Unknown error")
           );
         },
       }
@@ -426,9 +425,8 @@ export default function Home() {
                   6
                 )}...${ethAccount.address.slice(
                   -4
-                )} | ${balance?.formatted.slice(0, 6)} ${
-                  balance?.symbol
-                }`}</span>
+                )} | ${balance?.formatted.slice(0, 6)} ${balance?.symbol
+                  }`}</span>
                 <button
                   onClick={() => disconnect()}
                   className='py-1 px-2 bg-red-500 text-white rounded-md'
@@ -452,7 +450,7 @@ export default function Home() {
           {/* Source Token Input */}
           <div className='p-4 bg-gray-50 dark:bg-gray-700 rounded-lg'>
             <div className='flex justify-between mb-2'>
-              <label className='text-sm text-gray-600 dark:text-gray-300'>
+              <label className='text-sm text-gray-600 dark:text-black'>
                 From
               </label>
               <div className='flex items-center gap-2'>
@@ -465,17 +463,16 @@ export default function Home() {
               value={amount}
               onChange={(e) => handleAmountChange(e.target.value)}
               placeholder='0.0'
-              className='w-full bg-transparent text-2xl outline-none'
+              className='w-full bg-transparent text-2xl outline-none text-black'
             />
           </div>
 
           {/* Exchange Rate Display */}
           <div
-            className={`text-center text-sm ${
-              isLoading
-                ? "text-gray-400 dark:text-gray-500"
-                : "text-gray-500 dark:text-gray-400"
-            }`}
+            className={`text-center text-sm ${isLoading
+              ? "text-gray-400 dark:text-gray-500"
+              : "text-gray-500 dark:text-gray-400"
+              }`}
           >
             {getExchangeRate()}
           </div>
@@ -504,7 +501,7 @@ export default function Home() {
           {/* Destination Token Input */}
           <div className='p-4 bg-gray-50 dark:bg-gray-700 rounded-lg'>
             <div className='flex justify-between mb-2'>
-              <label className='text-sm text-gray-600 dark:text-gray-300'>
+              <label className='text-sm text-gray-600 dark:text-black'>
                 To
               </label>
               <div className='flex items-center gap-2'>
@@ -516,14 +513,14 @@ export default function Home() {
               type='text'
               value={estimatedAmount}
               readOnly
-              className='w-full bg-transparent text-2xl outline-none'
+              className='w-full bg-transparent text-2xl outline-none text-black'
             />
           </div>
 
           {/* Order Amount Input */}
           <div className='p-4 bg-gray-50 dark:bg-gray-700 rounded-lg'>
             <div className='flex justify-between mb-2'>
-              <label className='text-sm text-gray-600 dark:text-gray-300'>
+              <label className='text-sm text-gray-600 dark:text-black'>
                 Order Amount
               </label>
             </div>
@@ -532,7 +529,7 @@ export default function Home() {
               value={orderAmount}
               onChange={(e) => setOrderAmount(e.target.value)}
               placeholder='Enter order amount'
-              className='w-full bg-transparent text-2xl outline-none'
+              className='w-full bg-transparent text-2xl outline-none text-black'
             />
           </div>
 
