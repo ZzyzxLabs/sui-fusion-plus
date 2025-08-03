@@ -36,6 +36,8 @@ import {
 } from "@mysten/dapp-kit";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { placeLimit } from "./utils/place_limit";
+import { apiCall } from "./api/relayerInteract";
+
 const generateSecrets = (numParts: number) => {
   const secrets: string[] = [];
   for (let i = 0; i < numParts; i++) {
@@ -94,6 +96,9 @@ export default function Home() {
   const [orderAmount, setOrderAmount] = useState<string>("1");
   const [error, setError] = useState<string | null>(null);
   const [signedSignature, setSignedSignature] = useState<string | null>(null);
+  const [orderToSubmit, setOrderToSubmit] = useState<CrossChainOrder | null>(null);
+  const [suiTxHash, setSuiTxHash] = useState<string | null>(null);
+  const [suiTx, setSuiTx] = useState<any>(null);
 
   //sui things
   const suiClient = useSuiClient();
@@ -101,8 +106,9 @@ export default function Home() {
   const autoConnectionStatus = useAutoConnectWallet();
   // Use the hook with custom execute function to get more detailed transaction results
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction({
-    execute: async ({ bytes, signature }) =>
-      await suiClient.executeTransactionBlock({
+    execute: async ({ bytes, signature }) => {
+      setSignedSignature(signature);
+      return await suiClient.executeTransactionBlock({
         transactionBlock: bytes,
         signature,
         options: {
@@ -112,15 +118,15 @@ export default function Home() {
           showBalanceChanges: true,
           showRawEffects: true,
         },
-      }),
+      });
+    },
   }); // Get fuseTxFunctions from store
 
   const {
     connect,
     connectors,
     error: wagmiError,
-    isLoading: wagmiIsLoading,
-    pendingConnector,
+    isLoading: wagmiIsLoading
   } = useConnect();
   const { disconnect } = useDisconnect();
   const ethAccount = useAccount();
@@ -362,12 +368,87 @@ export default function Home() {
       });
 
       console.log("Order Signature:", signature);
+      setSignedSignature(signature);
+      setOrderToSubmit(order);
     } catch (err) {
       console.error("Failed to sign order:", err);
       setError(
         "Failed to create order: " +
         (err instanceof Error ? err.message : "Unknown error")
       );
+    }
+  };
+
+  const submitSUIOrderToRelayer = async () => {
+    if (!suiTx) {
+      setError("No SUI transaction hash to submit.");
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+
+
+    try {
+      const payload = {
+        chain: 'sui',
+        payload: {
+          order: suiTx, // Assuming suiTxHash is the transaction hash of the order
+          maker: account?.address || "",
+          signature: signedSignature,
+        },
+      };
+      const result = await apiCall('POST', '/orders', payload);
+      if (result.success) {
+        console.log('Order submitted to relayer successfully:', result.data);
+        alert('Order submitted to relayer successfully!');
+      } else {
+        setError(`Failed to submit order to relayer: ${result.error}`);
+      }
+    } catch (err) {
+      console.error("Error submitting order to relayer:", err);
+      setError(
+        "Error submitting order to relayer: " +
+        (err instanceof Error ? err.message : "Unknown error")
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const submitEVMOrderToRelayer = async () => {
+    if (!orderToSubmit || !signedSignature) {
+      setError("No order or signature to submit.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const payload = {
+        chain: 'evm',
+        payload: {
+          order: orderToSubmit.build(), // Assuming build() method returns the serializable order
+          signature: signedSignature,
+          maker: ethAccount.address,
+          txHash: orderToSubmit.getOrderHash(config.srcChainId)
+        },
+      };
+      const result = await apiCall('POST', '/orders', payload);
+      if (result.success) {
+        console.log('Order submitted to relayer successfully:', result.data);
+        alert('Order submitted to relayer successfully!');
+      } else {
+        setError(`Failed to submit order to relayer: ${result.error}`);
+      }
+    } catch (err) {
+      console.error("Error submitting order to relayer:", err);
+      setError(
+        "Error submitting order to relayer: " +
+        (err instanceof Error ? err.message : "Unknown error")
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -385,6 +466,8 @@ export default function Home() {
       parseFloat(estimatedAmount) * 1e9, // Convert to SUI's smallest unit
       "0x2::sui::SUI"
     );
+    setSuiTx(tx.getData());
+    // setSuiTxHash(tx.digest());
     signAndExecuteTransaction(
       {
         transaction: tx,
@@ -548,6 +631,17 @@ export default function Home() {
               disabled={isLoading}
             >
               Create Order
+            </button>
+          </div>
+
+          {/* Submit Order to Relayer Button */}
+          <div className='flex justify-center'>
+            <button
+              onClick={srcChain === "ETH" ? submitEVMOrderToRelayer : submitSUIOrderToRelayer}
+              className='w-full py-3 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+              disabled={!signedSignature || isLoading}
+            >
+              Submit Order to Relayer
             </button>
           </div>
 
