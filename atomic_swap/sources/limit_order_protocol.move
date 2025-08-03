@@ -5,6 +5,7 @@ module atomic_swap::limit_order_protocol;
 
 
 // === Imports ===
+use sui::event;
 use sui::coin::{Self, Coin, into_balance, from_balance};
 use sui::hash::{keccak256};
 use sui::clock::{Clock};
@@ -96,8 +97,7 @@ public fun create_order<T>(
         order_id: object::id(&limit_order),
     };
     
-    emit::emit(OrderCreated { order_id: object::id(limit_order) })
-    
+    event::emit(OrderCreated { order_id: object::id(&limit_order) });
     transfer::public_transfer(order_cap, ctx.sender());
     transfer::share_object(limit_order);
 }
