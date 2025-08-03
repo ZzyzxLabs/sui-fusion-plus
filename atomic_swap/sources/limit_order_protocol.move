@@ -123,7 +123,6 @@ public(package) fun fill_order<T>(
     order: &mut Order<T>,
     order_hash: vector<u8>,
     winner: &AuctionWinner,
-    safety_deposit: Coin<USDC>,
     hashlock: vector<u8>,
     clock: &Clock,
     ctx: &mut TxContext
@@ -137,7 +136,6 @@ public(package) fun fill_order<T>(
         order.maker,
         ctx.sender(),
         coin_to_escrow,
-        safety_deposit,
         clock,
         ctx
     );
