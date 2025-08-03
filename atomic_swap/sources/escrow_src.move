@@ -62,7 +62,7 @@ public(package) fun create_escrow_src<T>(
         balance: balance,
     };
 
-    timelocks::init_timelock(object::id(&escrow), clock, 5, 10, 15, 20, 0, 0, 0, ctx);
+    timelocks::init_timelock(object::id(&escrow), clock, 50000, 100000, 150000, 200000, 0, 0, 0, ctx);
     transfer::share_object(escrow);
 }
 
