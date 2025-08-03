@@ -4,8 +4,10 @@
   "description": "Cross-chain relayer service for SUI Fusion Plus",
   "main": "dist/index.js",
   "scripts": {
-    "example": "tsx scripts/example.ts",
-    "example:node": "node --loader ts-node/esm --experimental-specifier-resolution=node scripts/example.ts",
+    "test-order": "tsx scripts/test-submit-order.ts",
+    "resolver": "tsx scripts/startResolver.ts",
+    "resolver:dev": "nodemon --exec tsx scripts/startResolver.ts",
+    "resolver:build": "tsc && node dist/scripts/startResolver.js",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --exec tsx src/index.ts",
