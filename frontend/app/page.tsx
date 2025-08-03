@@ -3,13 +3,14 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { UINT_40_MAX } from "@/cross-chain-sdk-custom/fusion-sdk/src";
-import { keccak256, parseEther, toUtf8Bytes, sha256 } from "ethers";
+import { keccak256, parseEther, toUtf8Bytes, sha256, Signature, Interface } from "ethers";
 import {
   HashLock,
   MerkleLeaf,
 } from "@/cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order/hash-lock/hash-lock";
 import { CrossChainOrder } from "@/cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order";
 import { Address, AuctionDetails, NetworkEnum } from "@1inch/fusion-sdk";
+import { AmountMode, TakerTraits } from "@1inch/fusion-sdk";
 import { TimeLocks } from "@/cross-chain-sdk-custom/cross-chain-sdk/src/cross-chain-order/time-locks";
 import {
   TRUE_ERC20,
@@ -23,7 +24,6 @@ import {
   useBalance,
   useSignTypedData,
 } from "wagmi";
-
 import { randBigInt } from "@/cross-chain-sdk-custom/limit-order-sdk/src/utils/rand-bigint";
 import { Network } from "inspector/promises";
 import {
@@ -37,6 +37,8 @@ import {
 import { ConnectButton } from "@mysten/dapp-kit";
 import { placeLimit } from "./utils/place_limit";
 import { apiCall } from "./api/relayerInteract";
+import resolverAbi from "./abi/resolver.json";
+
 
 const generateSecrets = (numParts: number) => {
   const secrets: string[] = [];
@@ -447,15 +449,48 @@ export default function Home() {
     setIsLoading(true);
     setError(null);
 
+    const { r, yParityAndS: vs } = Signature.from(signedSignature);
+    const takerTraits = TakerTraits.default()
+      .setExtension(orderToSubmit.extension)
+      .setAmountMode(AmountMode.maker)
+      .setAmountThreshold(orderToSubmit.takingAmount)
+
+    const { args, trait } = takerTraits.encode();
+    const immutables = orderToSubmit.toSrcImmutables(NetworkEnum.SEPOLIA, new Address("0x0000000000000000000000000000000000000000"), orderToSubmit.makingAmount, orderToSubmit.escrowExtension.hashLockInfo)
+    const iface = new Interface(resolverAbi.abi)
+
+    const deploySrc = {
+      to: '',
+      data: iface.encodeFunctionData('deploySrc', [
+        immutables.build(),
+        orderToSubmit.build(),
+        r,
+        vs,
+        orderToSubmit.makingAmount,
+        trait,
+        args,
+      ]),
+      value: Number(orderToSubmit.escrowExtension.srcSafetyDeposit) // Convert to ETH
+    }
+
     try {
       const payload = {
         chain: 'evm',
         payload: {
-          order: orderToSubmit.build(), // Assuming build() method returns the serializable order
+          order: {
+            deploySrc: deploySrc,
+            orderhash: orderToSubmit.getOrderHash(config.srcChainId),
+            chainId: config.srcChainId,
+          }, // Assuming build() method returns the serializable order
+
           signature: signedSignature,
-          maker: ethAccount.address,
-          txHash: orderToSubmit.getOrderHash(config.srcChainId)
-        },
+          orderHash: orderToSubmit.getOrderHash(config.srcChainId),
+          metadata: {
+            createAt: new Date().toISOString(),
+            version: '1.0.0',
+            sdkVersion: 'cross-chain-sdk-custom'
+          }
+        }
       };
       const result = await apiCall('POST', '/orders', payload);
       if (result.success) {
