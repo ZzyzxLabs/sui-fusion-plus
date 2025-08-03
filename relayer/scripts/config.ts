@@ -1,5 +1,7 @@
 import * as Sdk from 'cross-chain-sdk-custom';
 import { NetworkEnum } from 'cross-chain-sdk-custom';
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Type definitions for configuration
 export interface TokenConfig {
@@ -29,12 +31,14 @@ export interface Config {
 // Environment variables with defaults
 const getEnvVar = (name: string, defaultValue?: string): string => {
   const value = process.env[name];
+  console.log('value', value);
   if (!value) {
     if (defaultValue !== undefined) {
       return defaultValue;
     }
     throw new Error(`Environment variable ${name} is required`);
   }
+  
   return value;
 };
 
@@ -56,7 +60,7 @@ export const config: Config = {
       createFork: getBoolEnvVar('SRC_CHAIN_CREATE_FORK', false),
       limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
       wrappedNative: '0xb16F35c0Ae2912430DAc15764477E179D9B9EbEa', // WETH on Sepolia
-      ownerPrivateKey: getEnvVar('SRC_PRIVATE_KEY', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'),
+      ownerPrivateKey: getEnvVar('EVM_PRIVATE_KEY', ''),
       tokens: {
         USDC: {
           address: '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
@@ -70,7 +74,7 @@ export const config: Config = {
       createFork: getBoolEnvVar('DST_CHAIN_CREATE_FORK', false),
       limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
       wrappedNative: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c', // WBNB
-      ownerPrivateKey: getEnvVar('DST_PRIVATE_KEY', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'),
+      ownerPrivateKey: getEnvVar('EVM_PRIVATE_KEY', ''),
       tokens: {
         USDC: {
           address: '0x8965349fb649a33a30cbfda057d8ec2c48abe2a2',

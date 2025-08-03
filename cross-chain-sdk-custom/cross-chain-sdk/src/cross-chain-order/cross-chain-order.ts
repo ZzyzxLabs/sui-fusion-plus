@@ -13,7 +13,7 @@ import {
     NetworkEnum
 } from '@1inch/fusion-sdk'
 import assert from 'assert'
-import {CrossChainOrderInfo, Details, EscrowParams, Extra, AdvancedOrderInfo} from './types'
+import {CrossChainOrderInfo, Details, EscrowParams, Extra} from './types'
 import {InnerOrder} from './inner-order'
 import {EscrowExtension} from './escrow-extension'
 import {TRUE_ERC20} from '../deployments'
@@ -22,20 +22,12 @@ import {Immutables} from '../immutables'
 
 export class CrossChainOrder {
     private inner: InnerOrder
-    public advancedOrderInfo: AdvancedOrderInfo
     private constructor(
         extension: EscrowExtension,
         orderInfo: OrderInfoData,
         extra?: Extra,
-        advancedOrderInfo?: AdvancedOrderInfo,
     ) {
         this.inner = new InnerOrder(extension, orderInfo, extra)
-        this.advancedOrderInfo = advancedOrderInfo || {
-            maker_evm: '',
-            maker_sui: '',
-            maker_asset_advanced: '',
-            taker_asset_advanced: ''
-        }
     }
 
     get dstChainId(): NetworkEnum {
@@ -123,7 +115,6 @@ export class CrossChainOrder {
         escrowParams: EscrowParams,
         details: Details,
         extra?: Extra,
-        advancedOrderInfo?: AdvancedOrderInfo,
     ): CrossChainOrder {
         const postInteractionData = SettlementPostInteractionData.new({
             bankFee: details.fees?.bankFee || 0n,
@@ -169,7 +160,6 @@ export class CrossChainOrder {
                 takerAsset: TRUE_ERC20[escrowParams.srcChainId] || new Address('0xda0000d4000015a526378bb6fafc650cea5966f8')
             },
             extra,
-            advancedOrderInfo
         )
     }
 
