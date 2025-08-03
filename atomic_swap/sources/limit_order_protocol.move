@@ -51,6 +51,12 @@ public struct OrderCap has key, store {
     order_id: ID
 }
 
+// === Events ===
+
+public struct OrderCreated has copy, drop {
+    order_id: ID
+}
+
 // === Init Functions ===
 fun init(
     ctx: &mut TxContext
@@ -89,6 +95,9 @@ public fun create_order<T>(
         id: object::new(ctx),
         order_id: object::id(&limit_order),
     };
+    
+    emit::emit(OrderCreated { order_id: object::id(limit_order) })
+    
     transfer::public_transfer(order_cap, ctx.sender());
     transfer::share_object(limit_order);
 }
