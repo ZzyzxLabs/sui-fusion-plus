@@ -9,7 +9,6 @@ use sui::coin::{Coin, into_balance};
 use sui::hash::{keccak256};
 use sui::clock::{timestamp_ms, Clock};
 use sui::balance::{Self, Balance};
-use usdc::usdc::USDC;
 use atomic_swap::timelocks::{Self, Timelock};
 
 // === Errors ===
@@ -28,7 +27,6 @@ public struct EscrowSrc<phantom T> has key {
     maker: address,
     taker: address,
     balance: Balance<T>,
-    safety_deposit: Balance<USDC>,
 }
 
 // === Events ===
@@ -51,12 +49,10 @@ public(package) fun create_escrow_src<T>(
     maker: address, // the user who deposit first
     taker: address, // the resolver
     asset: Coin<T>,
-    safety_deposit: Coin<USDC>,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
     let balance = into_balance(asset);
-    let deposit_balance = into_balance(safety_deposit);
     let escrow = EscrowSrc<T>{
         id: object::new(ctx),
         order_hash: order_hash,
@@ -64,10 +60,9 @@ public(package) fun create_escrow_src<T>(
         maker: maker,
         taker: taker,
         balance: balance,
-        safety_deposit: deposit_balance,
     };
 
-    timelocks::init_timelock(object::id(&escrow), clock, 5, 10, 15, 20, 0, 0, 0, ctx);
+    timelocks::init_timelock(object::id(&escrow), clock, 50000, 100000, 150000, 200000, 0, 0, 0, ctx);
     transfer::share_object(escrow);
 }
 
@@ -171,9 +166,6 @@ fun withdraw_helper<T>(
     let asset = balance::withdraw_all(&mut escrow.balance).into_coin(ctx);
     transfer::public_transfer(asset, target);
 
-    let safety_deposit = balance::withdraw_all(&mut escrow.safety_deposit).into_coin(ctx);
-    transfer::public_transfer(safety_deposit, ctx.sender());
-
     event::emit(EscrowWithdrawal {secret: secret });
 }
 
@@ -188,10 +180,7 @@ fun cancel_helper<T>(
 
     let asset = balance::withdraw_all(&mut escrow.balance).into_coin(ctx);
     transfer::public_transfer(asset, escrow.maker);
-
-    let safety_deposit = balance::withdraw_all(&mut escrow.safety_deposit).into_coin(ctx);
-    transfer::public_transfer(safety_deposit, ctx.sender());
-
+    
     event::emit(EscrowCancelled{});
 }
 
