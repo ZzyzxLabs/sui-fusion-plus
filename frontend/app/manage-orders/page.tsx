@@ -1,26 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiCall } from '../api/relayerInteract';
 
 export default function ManageOrders() {
-  const [orders, setOrders] = useState([
-    {
-      id: '1',
-      fromChain: 'ETH',
-      toChain: 'SUI',
-      amount: '1.5',
-      status: 'pending',
-      createdAt: '2024-01-15 10:30:00'
-    },
-    {
-      id: '2',
-      fromChain: 'SUI',
-      toChain: 'ETH',
-      amount: '100',
-      status: 'completed',
-      createdAt: '2024-01-14 15:45:00'
-    }
-  ]);
+  const [orders, setOrders] = useState([]);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const response = await apiCall('GET', '/orders');
+        if (response.success) {
+          // Assuming the API returns an array of orders directly
+          setOrders(response.data.data);
+          console.log('Fetched orders:', response.data);
+        } else {
+          console.error('Failed to fetch orders:', response.error);
+        }
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+      }
+    };
+
+    fetchOrders();
+  }, []);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
@@ -28,7 +31,7 @@ export default function ManageOrders() {
         <h1 className="text-3xl font-bold text-center mb-8 text-gray-900 dark:text-white">
           Manage Orders
         </h1>
-        
+
         <div className="space-y-6">
           {/* Order Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -39,19 +42,19 @@ export default function ManageOrders() {
             <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">Completed</h3>
               <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-                {orders.filter(order => order.status === 'completed').length}
+                {orders.filter((order: any) => order.status === 'completed').length}
               </p>
             </div>
             <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-yellow-600 dark:text-yellow-400">Pending</h3>
               <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">
-                {orders.filter(order => order.status === 'pending').length}
+                {orders.filter((order: any) => order.status === 'pending').length}
               </p>
             </div>
             <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">Failed</h3>
               <p className="text-2xl font-bold text-red-700 dark:text-red-300">
-                {orders.filter(order => order.status === 'failed').length}
+                {orders.filter((order: any) => order.status === 'failed').length}
               </p>
             </div>
           </div>
@@ -95,22 +98,21 @@ export default function ManageOrders() {
                         #{order.id}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                        {order.fromChain}
+                        {order.chain}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                        {order.toChain}
+                        {order.targetChain}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                         {order.amount}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          order.status === 'completed' 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                            : order.status === 'pending'
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${order.status === 'completed'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                          : order.status === 'pending'
                             ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
                             : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                        }`}>
+                          }`}>
                           {order.status}
                         </span>
                       </td>
