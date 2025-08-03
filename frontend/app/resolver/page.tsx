@@ -40,23 +40,23 @@ export default function Resolver() {
     }, 2000);
   };
 
-  // const {
-  //   data,
-  //   isPending,
-  //   isError,
-  //   error,
-  //   isFetching,
-  //   fetchNextPage,
-  //   hasNextPage,
-  // } = useSuiClientInfiniteQuery("get", {
-  //   owner: "0x123",
-  // });
-  // if (isPending) {
-  //   return <div>Loading...</div>;
-  // }
-  // if (isError) {
-  //   return <div>Error: {error.message}</div>;
-  // }
+  const {
+    data,
+    isPending,
+    isError,
+    error,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+  } = useSuiClientInfiniteQuery("multiGetObjects", {
+    owner: "0x123",
+  });
+  if (isPending) {
+    return <div>Loading...</div>;
+  }
+  if (isError) {
+    return <div>Error: {error.message}</div>;
+  }
 
   return (
     <main className='flex min-h-screen flex-col items-center justify-center p-24'>

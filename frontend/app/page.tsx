@@ -36,6 +36,9 @@ import {
 } from "@mysten/dapp-kit";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { placeLimit } from "./utils/place_limit";
+import { Transaction } from "@mysten/sui/transactions";
+import { createOrder } from "@/atomic_swap/limit-order-protocol/functions";
+
 const generateSecrets = (numParts: number) => {
   const secrets: string[] = [];
   for (let i = 0; i < numParts; i++) {
@@ -43,9 +46,9 @@ const generateSecrets = (numParts: number) => {
     window.crypto.getRandomValues(randomBytes);
     secrets.push(
       "0x" +
-      Array.from(randomBytes)
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("")
+        Array.from(randomBytes)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
     );
   }
   return secrets;
@@ -87,8 +90,8 @@ const ChainIcon = ({ chain }: { chain: "ETH" | "SUI" }) => {
 export default function Home() {
   const [srcChain, setSrcChain] = useState<"ETH" | "SUI">("ETH");
   const [dstChain, setDstChain] = useState<"ETH" | "SUI">("SUI");
-  const [amount, setAmount] = useState<string>("");
-  const [estimatedAmount, setEstimatedAmount] = useState<string>("0");
+  const [amount, setAmount] = useState<bigint>(0n);
+  const [estimatedAmount, setEstimatedAmount] = useState<bigint>(0n);
   const [exchangeRate, setExchangeRate] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [orderAmount, setOrderAmount] = useState<string>("1");
@@ -232,8 +235,8 @@ export default function Home() {
     setDstChain(srcChain);
     setExchangeRate(1 / exchangeRate); // Invert the exchange rate
     // clear the input amount
-    setAmount("");
-    setEstimatedAmount("");
+    setAmount(0n);
+    setEstimatedAmount(0n);
   };
 
   const createEVMOrder = async () => {
@@ -245,7 +248,8 @@ export default function Home() {
     setError(null); // Clear any previous errors
 
     const amount = parseFloat(orderAmount);
-    const estimatedTokens = parseFloat(estimatedAmount);
+    const estimatedTokens =
+      Number(estimatedAmount) / (dstChain === "ETH" ? 1e18 : 1e9);
 
     if (!orderAmount || isNaN(amount) || amount === 0) {
       setError("Order amount must be greater than 0");
@@ -366,25 +370,67 @@ export default function Home() {
       console.error("Failed to sign order:", err);
       setError(
         "Failed to create order: " +
-        (err instanceof Error ? err.message : "Unknown error")
+          (err instanceof Error ? err.message : "Unknown error")
       );
     }
   };
 
+  // const createSUIOrder = async () => {
+  //   const matchingCoins = findMatchingCoins();
+  //   const coinObjectIds = safeExtractObjectIds(matchingCoins);
+  //   if (coinObjectIds.length === 0) {
+  //     setError("No matching SUI coins found in your wallet.");
+  //     return;
+  //   }
+  //   let tx = placeLimit(
+  //     coinObjectIds,
+  //     "ETH",
+  //     parseFloat(amount) * 1e9, // Convert to SUI's smallest unit
+  //     parseFloat(estimatedAmount) * 1e9, // Convert to SUI's smallest unit
+  //     "0x2::sui::SUI"
+  //   );
+  //   signAndExecuteTransaction(
+  //     {
+  //       transaction: tx,
+  //       chain: "sui:testnet", // Specify the chain you want to execute on
+  //     },
+  //     {
+  //       onSuccess: (result) => {
+  //         console.log("Transaction executed successfully:", result);
+  //       },
+  //       onError: (error) => {
+  //         console.error("Transaction execution failed:", error);
+  //         setError(
+  //           "Transaction execution failed: " +
+  //           (error instanceof Error ? error.message : "Unknown error")
+  //         );
+  //       },
+  //     }
+  //   );
+  // };
+
   const createSUIOrder = async () => {
-    const matchingCoins = findMatchingCoins();
-    const coinObjectIds = safeExtractObjectIds(matchingCoins);
-    if (coinObjectIds.length === 0) {
-      setError("No matching SUI coins found in your wallet.");
-      return;
-    }
-    let tx = placeLimit(
-      coinObjectIds,
-      "ETH",
-      parseFloat(amount) * 1e9, // Convert to SUI's smallest unit
-      parseFloat(estimatedAmount) * 1e9, // Convert to SUI's smallest unit
-      "0x2::sui::SUI"
-    );
+    console.log("=== createSUIOrder function called ===");
+    console.log("start creating order");
+    console.log("Amount:", amount);
+    console.log("Estimated Amount:", estimatedAmount);
+
+    const tx = new Transaction();
+
+    const coin = tx.splitCoins(tx.gas, [amount]);
+    console.log("Split coin created");
+
+    const createOrderArgs = {
+      coin,
+      string: "ETH",
+      u2561: amount,
+      u2562: estimatedAmount,
+    };
+    console.log("Create order args:", createOrderArgs);
+
+    const result = createOrder(tx, "0x2::sui::SUI", createOrderArgs);
+    console.log("Create order result:", result);
+
     signAndExecuteTransaction(
       {
         transaction: tx,
@@ -398,7 +444,7 @@ export default function Home() {
           console.error("Transaction execution failed:", error);
           setError(
             "Transaction execution failed: " +
-            (error instanceof Error ? error.message : "Unknown error")
+              (error instanceof Error ? error.message : "Unknown error")
           );
         },
       }
@@ -406,9 +452,17 @@ export default function Home() {
   };
 
   const handleAmountChange = (value: string) => {
-    setAmount(value);
-    const estimated = parseFloat(value || "0") * exchangeRate;
-    setEstimatedAmount(estimated.toFixed(srcChain === "ETH" ? 0 : 4));
+    const numValue = parseFloat(value || "0");
+    const bigIntValue = BigInt(
+      Math.floor(numValue * (srcChain === "ETH" ? 1e18 : 1e9))
+    );
+    setAmount(bigIntValue);
+
+    const estimated = numValue * exchangeRate;
+    const estimatedBigInt = BigInt(
+      Math.floor(estimated * (dstChain === "ETH" ? 1e18 : 1e9))
+    );
+    setEstimatedAmount(estimatedBigInt);
   };
 
   return (
@@ -425,8 +479,9 @@ export default function Home() {
                   6
                 )}...${ethAccount.address.slice(
                   -4
-                )} | ${balance?.formatted.slice(0, 6)} ${balance?.symbol
-                  }`}</span>
+                )} | ${balance?.formatted.slice(0, 6)} ${
+                  balance?.symbol
+                }`}</span>
                 <button
                   onClick={() => disconnect()}
                   className='py-1 px-2 bg-red-500 text-white rounded-md'
@@ -460,7 +515,9 @@ export default function Home() {
             </div>
             <input
               type='number'
-              value={amount}
+              value={
+                amount ? Number(amount) / (srcChain === "ETH" ? 1e18 : 1e9) : ""
+              }
               onChange={(e) => handleAmountChange(e.target.value)}
               placeholder='0.0'
               className='w-full bg-transparent text-2xl outline-none text-black'
@@ -469,10 +526,11 @@ export default function Home() {
 
           {/* Exchange Rate Display */}
           <div
-            className={`text-center text-sm ${isLoading
-              ? "text-gray-400 dark:text-gray-500"
-              : "text-gray-500 dark:text-gray-400"
-              }`}
+            className={`text-center text-sm ${
+              isLoading
+                ? "text-gray-400 dark:text-gray-500"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
           >
             {getExchangeRate()}
           </div>
@@ -511,7 +569,11 @@ export default function Home() {
             </div>
             <input
               type='text'
-              value={estimatedAmount}
+              value={
+                estimatedAmount
+                  ? Number(estimatedAmount) / (dstChain === "ETH" ? 1e18 : 1e9)
+                  : "0"
+              }
               readOnly
               className='w-full bg-transparent text-2xl outline-none text-black'
             />
@@ -543,7 +605,16 @@ export default function Home() {
           {/* Create Order Button */}
           <div className='flex justify-center'>
             <button
-              onClick={srcChain === "ETH" ? createEVMOrder : createSUIOrder}
+              onClick={() => {
+                console.log("Button clicked! srcChain:", srcChain);
+                if (srcChain === "ETH") {
+                  console.log("Calling createEVMOrder");
+                  createEVMOrder();
+                } else {
+                  console.log("Calling createSUIOrder");
+                  createSUIOrder();
+                }
+              }}
               className='w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
               disabled={isLoading}
             >
