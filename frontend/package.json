@@ -1,0 +1,38 @@
+{
+  "name": "relayer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@1inch/byte-utils": "^3.1.0",
+    "@1inch/cross-chain-sdk": "^0.2.1-rc.58",
+    "@mysten/dapp-kit": "^0.17.2",
+    "@mysten/sui": "^1.36.1",
+    "@openzeppelin/merkle-tree": "^1.0.6",
+    "@radix-ui/themes": "^3.2.1",
+    "@suiet/wallet-kit": "^0.5.1",
+    "@tanstack/react-query": "^5.84.1",
+    "ethers": "^6.13.1",
+    "next": "15.4.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "viem": "^2.33.2",
+    "wagmi": "^2.16.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.4.4",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

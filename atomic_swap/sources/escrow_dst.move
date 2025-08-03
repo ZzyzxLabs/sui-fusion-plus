@@ -23,12 +23,12 @@ const EInvalidTimelock: u64 = 3;
 /// The escrow can be withdrawn by the taker with the correct secret or cancelled by the maker.
 public struct EscrowDst<phantom T> has key {
     id: UID,
-    orderHash: vector<u8>,
+    order_hash: vector<u8>,
     hashlock: vector<u8>,
     maker: address,
     taker: address,
     balance: Balance<T>,
-    safetyDeposit: Balance<USDC>,
+    safety_deposit: Balance<USDC>,
 }
 
 // === Events ===
@@ -46,25 +46,25 @@ public struct EscrowCancelled has copy, drop {}
 /// Creates a new destination escrow with the specified parameters.
 /// The escrow holds the deposited asset and safety deposit until withdrawn or cancelled.
 public(package) fun create_escrow_dst<T>(
-    orderHash: vector<u8>,
+    order_hash: vector<u8>,
     hashlock: vector<u8>,
     maker: address, // the user who deposit first
     taker: address, // the resolver
     asset: Coin<T>,
-    safetyDeposit: Coin<USDC>,
+    safety_deposit: Coin<USDC>,
     clock: &Clock, 
     ctx: &mut TxContext
 ) {
     let balance = into_balance(asset);
-    let depositBalance = into_balance(safetyDeposit);
+    let deposit_balance = into_balance(safety_deposit);
     let escrow = EscrowDst<T>{
         id: object::new(ctx),
-        orderHash: orderHash,
+        order_hash: order_hash,
         hashlock: hashlock,
         maker: maker,
         taker: taker,
         balance: balance,
-        safetyDeposit: depositBalance,
+        safety_deposit: deposit_balance,
     };
     timelocks::init_timelock(object::id(&escrow), clock, 0, 0, 0, 0, 5, 10, 15, ctx);
     transfer::share_object(escrow);
@@ -136,8 +136,8 @@ fun withdraw_helper<T>(
     let asset = balance::withdraw_all(&mut escrow.balance).into_coin(ctx);
     transfer::public_transfer(asset, escrow.maker);
 
-    let safetyDeposit = balance::withdraw_all(&mut escrow.safetyDeposit).into_coin(ctx);
-    transfer::public_transfer(safetyDeposit, ctx.sender());
+    let safety_deposit = balance::withdraw_all(&mut escrow.safety_deposit).into_coin(ctx);
+    transfer::public_transfer(safety_deposit, ctx.sender());
 
     event::emit(EscrowWithdrawal {secret: secret });
 }
@@ -154,8 +154,8 @@ fun cancel_helper<T>(
     let asset = balance::withdraw_all(&mut escrow.balance).into_coin(ctx);
     transfer::public_transfer(asset, escrow.taker);
 
-    let safetyDeposit = balance::withdraw_all(&mut escrow.safetyDeposit).into_coin(ctx);
-    transfer::public_transfer(safetyDeposit, ctx.sender());
+    let safety_deposit = balance::withdraw_all(&mut escrow.safety_deposit).into_coin(ctx);
+    transfer::public_transfer(safety_deposit, ctx.sender());
 
     event::emit(EscrowCancelled{});
 }

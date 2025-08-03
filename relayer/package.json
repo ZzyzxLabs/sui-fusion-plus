@@ -33,6 +33,8 @@
   },
   "dependencies": {
     "axios": "^1.11.0",
+    "@mysten/dapp-kit": "^0.17.2",
+    "@mysten/sui": "^1.36.1",
     "cors": "^2.8.5",
     "cross-chain-sdk-custom": "file:../cross-chain-sdk-custom/cross-chain-sdk",
     "dotenv": "^17.2.1",
