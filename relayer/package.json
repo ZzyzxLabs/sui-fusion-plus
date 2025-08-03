@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Cross-chain relayer service for SUI Fusion Plus",
   "main": "dist/index.js",
+  "type": "module",
   "scripts": {
+    "example": "tsx scripts/example.ts",
+    "example:node": "node --loader ts-node/esm --experimental-specifier-resolution=node scripts/example.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --exec ts-node src/index.ts",
@@ -29,14 +32,16 @@
     "npm": ">=8.0.0"
   },
   "dependencies": {
+    "axios": "^1.11.0",
     "@mysten/dapp-kit": "^0.17.2",
     "@mysten/sui": "^1.36.1",
     "cors": "^2.8.5",
+    "cross-chain-sdk-custom": "file:../cross-chain-sdk-custom/cross-chain-sdk",
     "dotenv": "^17.2.1",
+    "ethers": "^6.15.0",
     "express": "^4.21.2",
     "helmet": "^8.1.0",
-    "morgan": "^1.10.1",
-    "cross-chain-sdk-custom": "file:../cross-chain-sdk-custom/cross-chain-sdk"
+    "morgan": "^1.10.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -47,6 +52,7 @@
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.7.0",
     "typescript": "^5.9.2"
   }
 }

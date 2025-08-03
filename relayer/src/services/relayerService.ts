@@ -6,7 +6,13 @@ import {
   SubmitOrderRequest,
   SubmitOrderResponse,
   GetOrdersFilters,
-  PaginatedResponse
+  PaginatedResponse,
+  SignatureRequest,
+  SignatureResponse,
+  VerifyRequest,
+  VerifyResponse,
+  SecretRequest,
+  SecretResponse
 } from '../types';
 
 /**
@@ -21,7 +27,7 @@ export class RelayerService {
    */
   public async getStatus(): Promise<RelayerStatus> {
     const pendingOrders = Array.from(this.orders.values()).filter(
-      order => order.status === OrderStatus.PENDING || order.status === OrderStatus.PROCESSING
+      order => order.status === OrderStatus.PENDING || order.status === OrderStatus.VERIFIED
     ).length;
 
     const processedOrders = Array.from(this.orders.values()).filter(
@@ -30,26 +36,10 @@ export class RelayerService {
 
     return {
       isActive: true,
-      supportedChains: ['ethereum', 'sui', 'polygon', 'bsc'],
+      supportedChains: ['sui', 'evm'],
       pendingOrders,
       processedOrders,
       totalOrders: this.orders.size,
-      lastProcessedBlock: {
-        'ethereum': 18800000,
-        'sui': 25000000,
-        'polygon': 50000000,
-        'bsc': 32000000
-      },
-      balances: {
-        'ethereum': {
-          'ETH': '10.5',
-          'USDC': '50000.0'
-        },
-        'sui': {
-          'SUI': '1000.0',
-          'USDC': '25000.0'
-        }
-      }
     };
   }
 
@@ -62,15 +52,14 @@ export class RelayerService {
 
     const orderId = `order_${++this.orderCounter}_${Date.now()}`;
     
+    
     const order: Order = {
       id: orderId,
-      sourceChain: orderData.sourceChain,
-      destinationChain: orderData.destinationChain,
-      sourceToken: orderData.sourceToken,
-      destinationToken: orderData.destinationToken,
-      amount: orderData.amount,
-      recipient: orderData.recipient,
-      sender: orderData.sender,
+      chain: orderData.chain,
+      targetChain: orderData.chain === 'evm' ? 'sui' : 'evm',
+      order: orderData.payload.order,
+      txHash: orderData.payload.txHash || '',
+      signature: orderData.payload.signature || '',
       status: OrderStatus.PENDING,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -79,12 +68,13 @@ export class RelayerService {
     this.orders.set(orderId, order);
 
     // Simulate order processing (in real implementation, this would trigger actual processing)
-    setTimeout(() => {
-      this.processOrder(orderId);
-    }, 1000);
+    // setTimeout(() => {
+    //   this.processOrder(orderId);
+    // }, 1000);
 
     return {
       orderId,
+      orderHash: orderId, // For backward compatibility with test
       status: OrderStatus.PENDING,
       estimatedProcessingTime: 300, // 5 minutes
       fee: '0.1', // 0.1% fee
@@ -109,16 +99,9 @@ export class RelayerService {
     if (filters.status) {
       ordersArray = ordersArray.filter(order => order.status === filters.status);
     }
-    if (filters.sourceChain) {
-      ordersArray = ordersArray.filter(order => order.sourceChain === filters.sourceChain);
+    if (filters.chain) {
+      ordersArray = ordersArray.filter(order => order.chain === filters.chain);
     }
-    if (filters.destinationChain) {
-      ordersArray = ordersArray.filter(order => order.destinationChain === filters.destinationChain);
-    }
-    if (filters.sender) {
-      ordersArray = ordersArray.filter(order => order.sender === filters.sender);
-    }
-
     // Sort by creation date (newest first)
     ordersArray.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
@@ -173,95 +156,222 @@ export class RelayerService {
   public async getSupportedChains(): Promise<SupportedChain[]> {
     return [
       {
-        chainId: 'ethereum',
-        name: 'Ethereum',
+        chainId: 'Sepolia',
+        name: 'Sepolia',
         rpcUrl: 'https://eth-mainnet.alchemyapi.io/v2/...',
         isActive: true,
         supportedTokens: ['ETH', 'USDC', 'USDT', 'DAI'],
         blockConfirmations: 12
       },
       {
-        chainId: 'sui',
+        chainId: 'Sui',
         name: 'Sui Network',
         rpcUrl: 'https://fullnode.mainnet.sui.io',
         isActive: true,
         supportedTokens: ['SUI', 'USDC'],
         blockConfirmations: 1
-      },
-      {
-        chainId: 'polygon',
-        name: 'Polygon',
-        rpcUrl: 'https://polygon-rpc.com',
-        isActive: true,
-        supportedTokens: ['MATIC', 'USDC', 'USDT'],
-        blockConfirmations: 20
-      },
-      {
-        chainId: 'bsc',
-        name: 'BNB Smart Chain',
-        rpcUrl: 'https://bsc-dataseed.binance.org',
-        isActive: true,
-        supportedTokens: ['BNB', 'USDT', 'BUSD'],
-        blockConfirmations: 15
       }
     ];
+  }
+
+  /**
+   * Get signature for an order (EVM orders only)
+   */
+  public async resolveIntent(request: SignatureRequest): Promise<SignatureResponse> {
+    const order = this.orders.get(request.orderId);
+    
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    if (order.chain === 'sui') {
+      // TODO: Implement Sui intent resolution to call whitelisted resolver
+      console.log('Sui intent resolution to call whitelisted resolver', request.resolverId);
+      return {
+        orderId: request.orderId,
+        targetChain: order.targetChain as "sui" | "evm",
+        order: order.order
+      }
+    }
+
+    return {
+      orderId: request.orderId,
+      signature: order.signature,
+      targetChain: order.targetChain as "sui" | "evm",
+      order: order.order
+    };
+  }
+
+  /**
+   * Verify escrow status for an order
+   */
+  public async verifyEscrow(request: VerifyRequest): Promise<VerifyResponse> {
+    const order = this.orders.get(request.orderId);
+    
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    const issues: string[] = [];
+
+    // Validate escrow addresses format
+    if (!this.isValidAddress(request.escrowSrc, order.chain)) {
+      issues.push(`Invalid escrowSrc address format for ${order.chain} chain`);
+    }
+
+    if (!this.isValidAddress(request.escrowDst, order.targetChain)) {
+      issues.push(`Invalid escrowDst address format for ${order.targetChain} chain`);
+    }
+
+    // Simulate escrow verification checks
+    const srcVerification = await this.checkEscrowStatus(request.escrowSrc, order.chain, 'source');
+    const dstVerification = await this.checkEscrowStatus(request.escrowDst, order.targetChain, 'destination');
+
+    issues.push(...srcVerification.issues);
+    issues.push(...dstVerification.issues);
+
+    // Order is verified if no issues found
+    const verified = issues.length === 0;
+
+    if (verified) {
+      order.status = OrderStatus.VERIFIED;
+      order.updatedAt = new Date();
+      this.orders.set(request.orderId, order);
+      console.log('Order status updated to verified', request.orderId);
+    }
+
+    return {
+      verified,
+      issues
+    };
+  }
+
+  /**
+   * Submit secret for an order and update status to PROCESSING
+   */
+  public async submitSecret(request: SecretRequest): Promise<SecretResponse> {
+    const order = this.orders.get(request.orderId);
+    
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Check if order is in a valid state to receive secret
+    if (order.status !== OrderStatus.VERIFIED && order.status !== OrderStatus.PENDING) {
+      throw new Error(`Cannot submit secret for order in ${order.status} status. Order must be VERIFIED or PENDING.`);
+    }
+
+    // Store the secret and update status
+    order.secret = request.secret;
+    order.status = OrderStatus.PROCESSING;
+    order.updatedAt = new Date();
+    this.orders.set(request.orderId, order);
+
+    console.log(`Order ${request.orderId} secret received, status updated to PROCESSING`);
+
+    return {
+      success: true,
+      message: 'Secret submitted successfully, order status updated to PROCESSING',
+      status: OrderStatus.PROCESSING
+    };
   }
 
   /**
    * Validate order data
    */
   private validateOrderData(orderData: SubmitOrderRequest): void {
-    if (!orderData.sourceChain || !orderData.destinationChain) {
-      throw new Error('Source and destination chains are required');
+    if (!orderData.chain || !orderData.payload) {
+      throw new Error('Chain and payload are required');
     }
 
-    if (!orderData.sourceToken || !orderData.destinationToken) {
-      throw new Error('Source and destination tokens are required');
+    if (orderData.chain === 'sui') {
+      if (!orderData.payload.order || !orderData.payload.txHash) {
+        throw new Error('Order and txHash are required');
+      }
+    }
+    if (orderData.chain === 'evm') {
+      if (!orderData.payload.order || !orderData.payload.signature) {
+        throw new Error('Order and signature are required');
+      }
+    }
+  }
+
+  /**
+   * Validate address format based on chain
+   */
+  private isValidAddress(address: string, chain: string): boolean {
+    if (chain === 'evm') {
+      // EVM address validation (0x followed by 40 hex characters)
+      return /^0x[a-fA-F0-9]{40}$/.test(address);
+    } else if (chain === 'sui') {
+      // Sui address validation (0x followed by 64 hex characters)
+      return /^0x[a-fA-F0-9]{64}$/.test(address);
+    }
+    return false;
+  }
+
+  /**
+   * Check escrow status (simulated)
+   */
+  private async checkEscrowStatus(escrowAddress: string, chain: string, type: 'source' | 'destination'): Promise<{ issues: string[] }> {
+    const issues: string[] = [];
+
+    // Simulate various escrow status checks
+    const random = Math.random();
+    
+    // Simulate balance check (10% chance of insufficient balance)
+    if (random < 0.1) {
+      issues.push(`Insufficient balance in ${type} escrow ${escrowAddress}`);
+    }
+    
+    // Simulate lock status check (5% chance of already locked)
+    if (random > 0.9 && random < 0.95) {
+      issues.push(`${type} escrow ${escrowAddress} is already locked by another order`);
+    }
+    
+    // Simulate initialization check (5% chance of not initialized)
+    if (random > 0.95) {
+      issues.push(`${type} escrow ${escrowAddress} is not properly initialized on ${chain} chain`);
     }
 
-    if (!orderData.amount || parseFloat(orderData.amount) <= 0) {
-      throw new Error('Valid amount is required');
+    // Simulate network connectivity issues (2% chance)
+    if (random > 0.98) {
+      issues.push(`Unable to verify ${type} escrow ${escrowAddress} due to ${chain} network connectivity issues`);
     }
 
-    if (!orderData.recipient || !orderData.sender) {
-      throw new Error('Recipient and sender addresses are required');
-    }
-
-    if (orderData.sourceChain === orderData.destinationChain) {
-      throw new Error('Source and destination chains must be different');
-    }
+    return { issues };
   }
 
   /**
    * Simulate order processing
    */
-  private async processOrder(orderId: string): Promise<void> {
-    const order = this.orders.get(orderId);
-    if (!order) return;
+  // private async processOrder(orderId: string): Promise<void> {
+  //   const order = this.orders.get(orderId);
+  //   if (!order) return;
 
-    // Update to processing
-    order.status = OrderStatus.PROCESSING;
-    order.updatedAt = new Date();
-    this.orders.set(orderId, order);
+  //   // Update to processing
+  //   order.status = OrderStatus.PROCESSING;
+  //   order.updatedAt = new Date();
+  //   this.orders.set(orderId, order);
 
-    // Simulate processing time
-    setTimeout(() => {
-      const updatedOrder = this.orders.get(orderId);
-      if (updatedOrder && updatedOrder.status === OrderStatus.PROCESSING) {
-        // Simulate successful completion (90% success rate)
-        const isSuccessful = Math.random() > 0.1;
+  //   // Simulate processing time
+  //   setTimeout(() => {
+  //     const updatedOrder = this.orders.get(orderId);
+  //     if (updatedOrder && updatedOrder.status === OrderStatus.PROCESSING) {
+  //       // Simulate successful completion (90% success rate)
+  //       const isSuccessful = Math.random() > 0.1;
         
-        updatedOrder.status = isSuccessful ? OrderStatus.COMPLETED : OrderStatus.FAILED;
-        updatedOrder.updatedAt = new Date();
+  //       updatedOrder.status = isSuccessful ? OrderStatus.COMPLETED : OrderStatus.FAILED;
+  //       updatedOrder.updatedAt = new Date();
         
-        if (isSuccessful) {
-          updatedOrder.transactionHash = `0x${Math.random().toString(16).substr(2, 64)}`;
-          updatedOrder.destinationTransactionHash = `0x${Math.random().toString(16).substr(2, 64)}`;
-        }
+  //       if (isSuccessful) {
+  //         updatedOrder.transactionHash = `0x${Math.random().toString(16).substr(2, 64)}`;
+  //         updatedOrder.destinationTransactionHash = `0x${Math.random().toString(16).substr(2, 64)}`;
+  //       }
         
-        this.orders.set(orderId, updatedOrder);
-        console.log(`Order ${orderId} ${isSuccessful ? 'completed' : 'failed'}`);
-      }
-    }, 5000); // 5 seconds processing time
-  }
+  //       this.orders.set(orderId, updatedOrder);
+  //       console.log(`Order ${orderId} ${isSuccessful ? 'completed' : 'failed'}`);
+  //     }
+  //   }, 5000); // 5 seconds processing time
+  // }
 }

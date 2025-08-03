@@ -14,7 +14,7 @@ relayerRouter.get('/status', relayerController.getStatus);
  * Submit a cross-chain order for relay
  * POST /api/v1/relayer/submit
  */
-relayerRouter.post('/submit', relayerController.submitOrder);
+relayerRouter.post('/orders', relayerController.submitOrder);
 
 /**
  * Get order status
@@ -39,3 +39,24 @@ relayerRouter.post('/order/:orderId/cancel', relayerController.cancelOrder);
  * GET /api/v1/relayer/chains
  */
 relayerRouter.get('/chains', relayerController.getSupportedChains);
+
+/**
+ * Get signature for an order (EVM orders only)
+ * GET /api/v1/relayer/signature?orderId=...&resolverId=...
+ */
+relayerRouter.get('/resolve-intent', relayerController.resolveIntent);
+
+/**
+ * Verify escrow status for an order
+ * POST /api/v1/relayer/verify
+ */
+relayerRouter.post('/verify', relayerController.verifyEscrow);
+
+/**
+ * Submit secret for an order
+ * POST /api/v1/relayer/secret
+ */
+relayerRouter.post('/secret', relayerController.submitSecret);
+
+
+
