@@ -51,7 +51,7 @@ export class RelayerService {
     this.validateOrderData(orderData);
 
     const orderId = `order_${++this.orderCounter}_${Date.now()}`;
-    
+    console.log('orderData', JSON.stringify(orderData, null, 2));
     
     const order: Order = {
       id: orderId,
@@ -94,6 +94,7 @@ export class RelayerService {
    */
   public async getAllOrders(filters: GetOrdersFilters): Promise<PaginatedResponse<Order>> {
     let ordersArray = Array.from(this.orders.values());
+    console.log('ordersArray', ordersArray);
 
     // Apply filters
     if (filters.status) {
