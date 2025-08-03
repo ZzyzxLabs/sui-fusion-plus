@@ -38,8 +38,8 @@ interface DeploymentInfo {
 }
 
 const src: DeploymentInfo = {
-  escrowFactory: process.env.EVM_ESCROW_FACTORY_ADDRESS || '',
-  resolver: process.env.EVM_RESOLVER_ADDRESS || ''
+  escrowFactory: process.env.EVM_FACTORY_ADDRESS || '0x198d8047490317707b186a4dE727CA3E13B1bD78',
+  resolver: process.env.EVM_RESOLVER_ADDRESS || '0x6d515828112Fe62fc38da6B58A888bEDe6E4F38f'
 };
 
 async function main(): Promise<void> {
@@ -186,7 +186,13 @@ async function main(): Promise<void> {
 
     // Submit order to backend
     console.log('\n📤 Submitting order to backend...');
-    await submitOrderToBackend(order, orderHash, signature, srcChainId);
+    const orderId = await submitOrderToBackend(order, orderHash, signature, srcChainId);
+    
+    if (orderId) {
+      // Start monitoring order status
+      console.log('\n👀 Starting order status monitoring...');
+      await monitorOrderStatus(orderId, secret);
+    }
     
   } catch (error) {
     console.error('Error in main function:', error);
@@ -202,7 +208,7 @@ async function submitOrderToBackend(
   orderHash: string,
   signature: string,
   chainId: NetworkEnum
-): Promise<void> {
+): Promise<string | null> {
   try {
     // Backend server URL (from env or default)
     const serverUrl = process.env.SERVER_URL || 'http://localhost:8000';
@@ -241,6 +247,7 @@ async function submitOrderToBackend(
           deploySrc: deploySrc,
           orderHash: orderHash,
           chainId: chainId,
+          immutables: immutables.toJSON(),
         },
         signature: signature,
         orderHash: orderHash,
@@ -285,9 +292,12 @@ async function submitOrderToBackend(
       const orderId = response.data.orderId;
       console.log(`\n🔍 You can check order status with: GET ${serverUrl}/api/v1/relayer/order/${orderId}`);
       
+      return orderId; // Return the order ID for monitoring
+      
     } else {
       console.warn('⚠️ Unexpected response status:', response.status);
       console.log('Response data:', response.data);
+      return null;
     }
 
   } catch (error) {
@@ -309,7 +319,162 @@ async function submitOrderToBackend(
       console.error('Unexpected error:', error);
     }
     
-    throw error;
+    return null; // Return null on error instead of throwing
+  }
+}
+
+/**
+ * Monitor order status by polling the backend server
+ */
+async function monitorOrderStatus(orderId: string, secret: string): Promise<void> {
+  const serverUrl = process.env.SERVER_URL || 'http://localhost:8000';
+  const pollInterval = 10000; // Poll every 10 seconds
+  const maxPolls = 60; // Maximum 10 minutes (60 * 10 seconds)
+  let pollCount = 0;
+  
+  console.log(`🔄 Monitoring order ${orderId}...`);
+  console.log(`📊 Polling every ${pollInterval / 1000} seconds (max ${maxPolls} attempts)`);
+  
+  while (pollCount < maxPolls) {
+    try {
+      pollCount++;
+      console.log(`\n⏱️  Poll ${pollCount}/${maxPolls} - Checking order status...`);
+      
+      const response = await axios.get(
+        `${serverUrl}/api/v1/relayer/order/${orderId}`,
+        {
+          timeout: 10000 // 10 second timeout
+        }
+      );
+      
+      if (response.status === 200) {
+        const orderData = response.data;
+        const status = orderData.status;
+        const updatedAt = orderData.updatedAt;
+        
+        console.log(`📋 Status: ${status.toUpperCase()}`);
+        console.log(`🕐 Updated: ${new Date(updatedAt).toLocaleString()}`);
+        
+        // Log additional info based on status
+        if (orderData.txHash) {
+          console.log(`🔗 Transaction: ${orderData.txHash}`);
+        }
+        
+        if (orderData.escrowInfo) {
+          console.log(`🏦 Escrow Info:`, orderData.escrowInfo);
+        }
+        
+        // Check if order is in a final state
+        const finalStates = ['completed', 'resolved', 'verified', 'failed', 'cancelled', 'expired'];
+        if (finalStates.includes(status.toLowerCase())) {
+          if (status.toLowerCase() === 'completed' || status.toLowerCase() === 'resolved' || status.toLowerCase() === 'verified') {
+            console.log('🎉 Order completed successfully!');
+            if (orderData.result) {
+              console.log('📊 Final Result:', JSON.stringify(orderData.result, null, 2));
+            }
+            
+            // If status is verified, submit the secret to server
+            if (status.toLowerCase() === 'verified') {
+              console.log('\n🔐 Order verified! Submitting secret to server...');
+              await submitSecret(orderId, secret);
+            }
+          } else {
+            console.log(`❌ Order ended with status: ${status}`);
+            if (orderData.error) {
+              console.log('❗ Error details:', orderData.error);
+            }
+          }
+          return; // Exit monitoring
+        }
+        
+        // For ongoing states, show progress
+        if (status.toLowerCase() === 'processing') {
+          console.log('⚙️  Order is being processed by resolver...');
+        } else if (status.toLowerCase() === 'pending') {
+          console.log('⏳ Order is waiting to be picked up by resolver...');
+        }
+        
+      } else {
+        console.log(`⚠️  Unexpected response status: ${response.status}`);
+      }
+      
+      // Wait before next poll (unless this was the last attempt)
+      if (pollCount < maxPolls) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error checking order status (attempt ${pollCount}):`, 
+        axios.isAxiosError(error) ? error.message : error);
+      
+      // Wait before retry (unless this was the last attempt)
+      if (pollCount < maxPolls) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
+    }
+  }
+  
+  console.log('\n⏰ Monitoring timeout reached. Order may still be processing.');
+  console.log(`🔍 You can continue checking manually: GET ${serverUrl}/api/v1/relayer/order/${orderId}`);
+}
+
+/**
+ * Submit secret to the backend server for verified orders
+ */
+async function submitSecret(orderId: string, secret: string): Promise<void> {
+  const serverUrl = process.env.SERVER_URL || 'http://localhost:8000';
+  
+  try {
+    console.log(`🔐 Submitting secret for order ${orderId}...`);
+    
+    const secretPayload = {
+      orderId: orderId,
+      secret: secret
+    };
+    
+    console.log('📦 Secret payload:', {
+      orderId: orderId,
+      secret: secret.substring(0, 10) + '...' // Only show first 10 chars for security
+    });
+    
+    const response = await axios.post(
+      `${serverUrl}/api/v1/relayer/secret`,
+      secretPayload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000 // 10 second timeout
+      }
+    );
+    
+    if (response.status === 200 || response.status === 201) {
+      console.log('✅ Secret submitted successfully!');
+      console.log('📋 Server response:', response.data);
+    } else {
+      console.warn('⚠️ Unexpected response status:', response.status);
+      console.log('Response data:', response.data);
+    }
+    
+  } catch (error) {
+    console.error('❌ Failed to submit secret to server:');
+    
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+      } else if (error.request) {
+        console.error('Network error - no response received');
+        console.error('Please check if the backend server is running on:', serverUrl);
+      } else {
+        console.error('Request setup error:', error.message);
+      }
+    } else {
+      console.error('Unexpected error:', error);
+    }
+    
+    // Don't throw error here, just log it - we don't want to crash the monitoring
+    console.error('⚠️ Secret submission failed, but order monitoring completed');
   }
 }
 

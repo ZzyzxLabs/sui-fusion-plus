@@ -167,7 +167,7 @@ export class RelayerController {
   public verifyEscrow = async (req: Request, res: Response): Promise<void> => {
     try {
       const { orderId, escrowSrc, escrowDst } = req.body;
-      
+      console.log('verifyEscrow', orderId, escrowSrc, escrowDst)
       // Validate required fields
       if (!orderId || !escrowSrc || !escrowDst) {
         res.status(400).json({

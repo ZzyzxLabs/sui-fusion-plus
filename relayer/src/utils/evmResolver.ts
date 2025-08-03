@@ -1,6 +1,8 @@
-import { ethers, Interface, Signature } from 'ethers';
+import { ethers, Interface, Signature, id } from 'ethers';
 import * as Sdk from 'cross-chain-sdk-custom';
 import { Address } from 'cross-chain-sdk-custom';
+import EscrowFactoryContract from './abi/factory.json';
+import ResolverContract from './abi/resolver.json';
 
 /**
  * Order interface compatible with our relayer's Order type
@@ -29,7 +31,29 @@ export class EvmResolver {
     private readonly dstAddress: string,
     resolverAbi: any[]
   ) {
-    this.iface = new Interface(resolverAbi);
+    this.iface = new Interface(ResolverContract.abi);
+  }
+
+  /**
+   * Convert Immutables to array format for ethers encoding
+   * Based on Solidity struct: (bytes32,bytes32,uint256,uint256,uint256,uint256,uint256,uint256)
+   * Note: Only 8 fields, no extra bytes parameter
+   */
+  private immutablesToArray(immutables: Sdk.Immutables): any[] {
+    // Get the built immutables to access the correct timelocks format
+    const builtImmutables = immutables.build();
+    
+    return [
+      immutables.orderHash,                    // bytes32 orderHash
+      immutables.hashLock.toString(),         // bytes32 hashlock (use public method)
+      immutables.maker.toString(),            // address maker (uint256 format)
+      immutables.taker.toString(),            // address taker (uint256 format)  
+      immutables.token.toString(),            // address token (uint256 format)
+      immutables.amount.toString(),           // uint256 amount
+      immutables.safetyDeposit.toString(),    // uint256 safetyDeposit
+      builtImmutables.timelocks               // uint256 timelocks (from build() method)
+      // No extra bytes parameter - only 8 fields total
+    ];
   }
 
   public deploySrc(
@@ -65,7 +89,7 @@ export class EvmResolver {
     return {
       to: this.dstAddress,
       data: this.iface.encodeFunctionData('deployDst', [
-        immutables.build(),
+        this.immutablesToArray(immutables),
         immutables.timeLocks.toSrcTimeLocks().privateCancellation
       ]),
       value: immutables.safetyDeposit
@@ -80,14 +104,14 @@ export class EvmResolver {
   ): ethers.TransactionRequest {
     return {
       to: side === 'src' ? this.srcAddress : this.dstAddress,
-      data: this.iface.encodeFunctionData('withdraw', [escrow.toString(), secret, immutables.build()])
+      data: this.iface.encodeFunctionData('withdraw', [escrow.toString(), secret, this.immutablesToArray(immutables)])
     };
   }
 
   public cancel(side: 'src' | 'dst', escrow: Address, immutables: Sdk.Immutables): ethers.TransactionRequest {
     return {
       to: side === 'src' ? this.srcAddress : this.dstAddress,
-      data: this.iface.encodeFunctionData('cancel', [escrow.toString(), immutables.build()])
+      data: this.iface.encodeFunctionData('cancel', [escrow.toString(), this.immutablesToArray(immutables)])
     };
   }
 }
@@ -176,16 +200,100 @@ export class SdkEvmInteraction {
     'function cancel(address escrow, (bytes32,bytes32,uint256,uint256,uint256,uint256,uint256,uint256,bytes) immutables) external'
   ];
 
+  // Factory contract ABI for events - based on actual contract
+  private factoryAbi = [
+    'event SrcEscrowCreated((bytes32,bytes32,address,address,address,uint256,uint256,uint256,bytes) srcImmutables, (address,uint256,address,uint256,uint256,bytes) dstImmutablesComplement)'
+  ];
+
   constructor(
     rpcUrl: string, 
-    privateKey: string, 
-    factoryAddress: string, 
+    private privateKey: string, 
+    private factoryAddress: string, 
     resolverAddress: string, 
     lopAddress: string
   ) {
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
     this.wallet = new ethers.Wallet(privateKey, this.provider);
     this.resolver = new EvmResolver(resolverAddress, resolverAddress, this.resolverAbi);
+  }
+
+  /**
+   * Get the source implementation address from the factory contract
+   */
+  public async getSourceImpl(): Promise<Sdk.Address> {
+    return Sdk.Address.fromBigInt(
+      BigInt(
+        await this.provider.call({
+          to: this.factoryAddress,
+          data: id('ESCROW_SRC_IMPLEMENTATION()').slice(0, 10)
+        })
+      )
+    );
+  }
+
+  /**
+   * Get the destination implementation address from the factory contract
+   */
+  public async getDestinationImpl(): Promise<Sdk.Address> {
+    return Sdk.Address.fromBigInt(
+      BigInt(
+        await this.provider.call({
+          to: this.factoryAddress,
+          data: id('ESCROW_DST_IMPLEMENTATION()').slice(0, 10)
+        })
+      )
+    );
+  }
+
+  /**
+   * Get SrcEscrowCreated event from a specific block (like main.spec.ts)
+   */
+  public async getSrcDeployEvent(blockHash: string): Promise<[Sdk.Immutables, Sdk.DstImmutablesComplement]> {
+    const factoryInterface = new Interface(EscrowFactoryContract.abi)
+    const event = factoryInterface.getEvent('SrcEscrowCreated')!;
+    
+    console.log(`Querying SrcEscrowCreated events for blockHash ${blockHash}`);
+    console.log(`Factory address: ${this.factoryAddress}`);
+    console.log(`Event topic: ${event.topicHash}`);
+    
+    const logs = await this.provider.getLogs({
+      blockHash: blockHash,
+      address: this.factoryAddress,
+      topics: [event.topicHash]
+    });
+
+    console.log(`Found ${logs.length} SrcEscrowCreated events in blockHash ${blockHash}`);
+
+    if (logs.length === 0) {
+      throw new Error(`No SrcEscrowCreated event found in blockHash ${blockHash}. Factory: ${this.factoryAddress}`);
+    }
+
+    const [data] = logs.map((l) => factoryInterface.decodeEventLog(event, l.data, l.topics));
+    console.log('Decoded event data:', data);
+
+    const srcImmutables = data.srcImmutables; // Access by name instead of array index
+    const dstImmutablesComplement = data.dstImmutablesComplement;
+
+    return [
+      Sdk.Immutables.new({
+        orderHash: srcImmutables[0],
+        hashLock: Sdk.HashLock.fromString(srcImmutables[1]),
+        maker: Sdk.Address.fromBigInt(srcImmutables[2]),
+        taker: Sdk.Address.fromBigInt(srcImmutables[3]),
+        token: Sdk.Address.fromBigInt(srcImmutables[4]),
+        amount: srcImmutables[5],
+        safetyDeposit: srcImmutables[6],
+        timeLocks: Sdk.TimeLocks.fromBigInt(srcImmutables[7])
+        // Note: srcImmutables[8] is bytes parameters, which we skip for now
+      }),
+      Sdk.DstImmutablesComplement.new({
+        maker: Sdk.Address.fromBigInt(dstImmutablesComplement[0]),
+        amount: dstImmutablesComplement[1],
+        token: Sdk.Address.fromBigInt(dstImmutablesComplement[2]),
+        safetyDeposit: dstImmutablesComplement[3]
+        // Note: dstImmutablesComplement[4] is chainId, dstImmutablesComplement[5] is bytes parameters
+      })
+    ];
   }
 
   /**
@@ -200,29 +308,13 @@ export class SdkEvmInteraction {
   }): Promise<{ 
     txHash: string; 
     srcEscrowAddress?: string; 
+    srcImmutables?: Sdk.Immutables;
+    dstImmutablesComplement?: Sdk.DstImmutablesComplement;
   }> {
     try {
       // Use a reasonable default amount if auction price is 0 or not set
       const requestedAmount = params.amount && params.amount !== '0' ? params.amount : '100000000'; // 100 USDC default
       
-      // Convert relayer order to SDK format with the correct fill amount
-      const sdkOrder = convertToSdkOrder(
-        params.relayerOrder,
-        new Address(params.escrowFactory),
-        params.srcChainId,
-        params.dstChainId,
-        requestedAmount
-      );
-
-      // Create taker traits
-      const takerTraits = Sdk.TakerTraits.default()
-        .setExtension(sdkOrder.extension)
-        .setAmountMode(Sdk.AmountMode.maker)
-        .setAmountThreshold(sdkOrder.takingAmount);
-
-      // Use the makingAmount from the order to ensure full fill
-      // This avoids the "partial fill" error when amount doesn't match makingAmount
-      const fillAmountBigInt = sdkOrder.makingAmount;
 
 
       // Get transaction request
@@ -237,10 +329,12 @@ export class SdkEvmInteraction {
         value: params.relayerOrder.order.deploySrc.value
       }
 
-      // Send transaction (add gasLimit like simple-contract-test.ts)
+      // Send transaction with reasonable gas parameters
       const tx = await this.wallet.sendTransaction({
         ...txRequest,
-        gasLimit: 10_000_000n  // Same as simple-contract-test.ts
+        gasLimit: 2_000_000n,  // Reduced from 10M to 2M (still plenty for most transactions)
+        maxFeePerGas: 50_000_000_000n, // 50 gwei - reasonable for testnet
+        maxPriorityFeePerGas: 2_000_000_000n // 2 gwei - miner tip
       });
       console.log('waiting for tx: ', tx.hash);
       const receipt = await tx.wait(1);  // Wait for 1 confirmation like simple-contract-test.ts
@@ -249,8 +343,27 @@ export class SdkEvmInteraction {
         throw new Error('EVM source escrow deployment failed');
       }
 
+      // Calculate the escrow address using SDK (same as main.spec.ts)
+      // Get immutables from the deployment event (more accurate than reconstructing)
+      console.log('Getting srcEscrowEvent from blockHash:', receipt.blockHash);
+      
+      const [srcImmutables, complement] = await this.getSrcDeployEvent(receipt.blockHash!);
+      console.log('srcImmutables from event:', srcImmutables.toJSON());
+      
+      // Get the source implementation address from the factory contract
+      const srcImplementation = await this.getSourceImpl();
+      
+      const escrowFactory = new Sdk.EscrowFactory(new Sdk.Address(params.escrowFactory));
+      const srcEscrowAddress = escrowFactory.getSrcEscrowAddress(
+        srcImmutables,
+        srcImplementation
+      );
+
       return {
-        txHash: receipt.hash
+        txHash: receipt.hash,
+        srcEscrowAddress: srcEscrowAddress.toString(),
+        srcImmutables: srcImmutables,
+        dstImmutablesComplement: complement
       };
     } catch (error) {
       console.error('Error deploying EVM source escrow:', error);
@@ -276,8 +389,15 @@ export class SdkEvmInteraction {
         throw new Error('EVM destination escrow deployment failed');
       }
 
+      // Calculate the destination escrow address using SDK
+      // Note: This requires the source immutables and other parameters from main.spec.ts pattern
+      // For now, we'll use a placeholder since we don't have all required parameters
+      // TODO: Pass required parameters (srcImmutables, dstDeployedAt, resolverAddress) to this method
+      const dstEscrowAddress = '0x' + '1'.repeat(40); // Placeholder for dst escrow
+
       return {
-        txHash: receipt.hash
+        txHash: receipt.hash,
+        dstEscrowAddress: dstEscrowAddress
       };
     } catch (error) {
       console.error('Error deploying EVM destination escrow:', error);
@@ -324,6 +444,44 @@ export class SdkEvmInteraction {
     } catch (error) {
       console.error(`Error getting EVM escrow status:`, error);
       return { exists: false, locked: false };
+    }
+  }
+
+  /**
+   * Withdraw funds from escrow using secret
+   */
+  async withdraw(params: {
+    side: 'src' | 'dst';
+    escrowAddress: string;
+    secret: string;
+    immutables: Sdk.Immutables;
+  }): Promise<{ txHash: string }> {
+    try {
+      const txRequest = this.resolver.withdraw(
+        params.side,
+        new Sdk.Address(params.escrowAddress),
+        params.secret,
+        params.immutables
+      );
+
+      const tx = await this.wallet.sendTransaction({
+        ...txRequest,
+        gasLimit: 1_000_000n, // Reasonable gas limit for withdrawal
+        maxFeePerGas: 50_000_000_000n, // 50 gwei
+        maxPriorityFeePerGas: 2_000_000_000n // 2 gwei
+      });
+
+      console.log('Withdrawal tx sent:', tx.hash);
+      const receipt = await tx.wait(1);
+
+      if (!receipt || receipt.status !== 1) {
+        throw new Error('EVM withdrawal transaction failed');
+      }
+
+      return { txHash: receipt.hash };
+    } catch (error) {
+      console.error('Error executing EVM withdrawal:', error);
+      throw error;
     }
   }
 
