@@ -1,1 +1,1 @@
-export const package_addr = "0x4694f34af00d2741b59a6a5e41a958e48737eeca3b2a169daac5bc38e57111a1"
+export const package_addr = "0xecba85786ada15b580309bd2dde5b8ef79c4cc8e20a194f42fd08d58e622faaa"

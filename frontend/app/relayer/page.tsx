@@ -44,7 +44,7 @@ export default function Relayer() {
       const orderId = order.data?.content?.fields?.id?.id;
       const amount = order.data?.content?.fields?.src_amount;
       const winner = winners[orderId];
-      const protocolCap = "0x30caef6e588ffa034aaf3ee0aea9abc9db7eb61ce85c2619f40b5eb241605b19"; // TODO: 替換真實 object id
+      const protocolCap = "0x19fe8b66558091b1ccea9abfb031002cb6d1b462cb74c6fed92ce26abd14c4f8"; // TODO: 替換真實 object id
       const coinType = "0x2::sui::SUI";
 
       if (!winner) {
@@ -80,7 +80,7 @@ export default function Relayer() {
       MoveModule: {
         module: "limit_order_protocol",
         package:
-          "0x4694f34af00d2741b59a6a5e41a958e48737eeca3b2a169daac5bc38e57111a1",
+          "0xecba85786ada15b580309bd2dde5b8ef79c4cc8e20a194f42fd08d58e622faaa",
       },
     },
     limit: 20,
