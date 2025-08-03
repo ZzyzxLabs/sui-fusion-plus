@@ -164,6 +164,18 @@ export default function Home() {
     return typeStr.replace(/^0x0+/, "0x");
   }
 
+  const orders = useSuiClientQuery(
+    "queryEvents",
+    {
+      query: {
+        MoveModule: {
+          module: "limit_order_protocol",
+          package: "0x4694f34af00d2741b59a6a5e41a958e48737eeca3b2a169daac5bc38e57111a1"
+        }
+      },
+      limit: 20,
+    }
+  );
   const vaultAndCap = useSuiClientQuery(
     "getOwnedObjects",
     {
@@ -470,7 +482,7 @@ export default function Home() {
         trait,
         args,
       ]),
-      value: Number(orderToSubmit.escrowExtension.srcSafetyDeposit) // Convert to ETH
+      value: orderToSubmit.escrowExtension.srcSafetyDeposit.toString() // Convert to ETH
     }
 
     try {
@@ -511,6 +523,7 @@ export default function Home() {
   };
 
   const createSUIOrder = async () => {
+    console.log(orders.data?.data.map(item => item.parsedJson?.order_id))
     const matchingCoins = findMatchingCoins();
     const coinObjectIds = safeExtractObjectIds(matchingCoins);
     if (coinObjectIds.length === 0) {

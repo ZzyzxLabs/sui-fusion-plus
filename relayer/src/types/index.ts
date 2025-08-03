@@ -15,6 +15,8 @@ export interface Order {
   updatedAt: Date;
   transactionHash?: string;
   destinationTransactionHash?: string;
+  srcEscrowAddress?: string;
+  dstEscrowAddress?: string;
 }
 
 export enum OrderStatus {
